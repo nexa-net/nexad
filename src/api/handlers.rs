@@ -8,6 +8,7 @@ use serde::Deserialize;
 
 use nexa_core::config::parse_deployment;
 use nexa_core::domain::orchestrator::OrchestratorHandle;
+use nexa_core::error::NexaError;
 
 type AppState = State<OrchestratorHandle>;
 
@@ -153,6 +154,102 @@ pub async fn logs(
         }
         Err(e) => (
             StatusCode::NOT_FOUND,
+            Json(serde_json::json!({ "error": e.to_string() })),
+        )
+            .into_response(),
+    }
+}
+
+// ---- Project lifecycle handlers ----
+
+pub async fn suspend_project(
+    State(handle): AppState,
+    Path(name): Path<String>,
+) -> impl IntoResponse {
+    match handle.suspend_project(name).await {
+        Ok(()) => StatusCode::OK.into_response(),
+        Err(e) => (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({ "error": e.to_string() })),
+        )
+            .into_response(),
+    }
+}
+
+pub async fn resume_project(
+    State(handle): AppState,
+    Path(name): Path<String>,
+) -> impl IntoResponse {
+    match handle.resume_project(name).await {
+        Ok(()) => StatusCode::OK.into_response(),
+        Err(e) => (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({ "error": e.to_string() })),
+        )
+            .into_response(),
+    }
+}
+
+pub async fn delete_project(
+    State(handle): AppState,
+    Path(name): Path<String>,
+) -> impl IntoResponse {
+    match handle.delete_project(name).await {
+        Ok(()) => StatusCode::OK.into_response(),
+        Err(e) => {
+            let status = match &e {
+                NexaError::ProjectNotEmpty(_) => StatusCode::CONFLICT,
+                _ => StatusCode::NOT_FOUND,
+            };
+            (status, Json(serde_json::json!({ "error": e.to_string() }))).into_response()
+        }
+    }
+}
+
+// ---- Secrets handlers ----
+
+pub async fn list_secrets(
+    State(handle): AppState,
+    Path(project): Path<String>,
+) -> impl IntoResponse {
+    match handle.list_secrets(project).await {
+        Ok(names) => Json(serde_json::json!(names)).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": e.to_string() })),
+        )
+            .into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+pub struct SetSecretRequest {
+    pub value: String,
+}
+
+pub async fn set_secret(
+    State(handle): AppState,
+    Path((project, name)): Path<(String, String)>,
+    Json(req): Json<SetSecretRequest>,
+) -> impl IntoResponse {
+    match handle.set_secret(project, name, req.value.into_bytes()).await {
+        Ok(()) => StatusCode::OK.into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": e.to_string() })),
+        )
+            .into_response(),
+    }
+}
+
+pub async fn delete_secret(
+    State(handle): AppState,
+    Path((project, name)): Path<(String, String)>,
+) -> impl IntoResponse {
+    match handle.delete_secret(project, name).await {
+        Ok(()) => StatusCode::OK.into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
             Json(serde_json::json!({ "error": e.to_string() })),
         )
             .into_response(),

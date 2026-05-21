@@ -10,6 +10,18 @@ pub fn build(handle: OrchestratorHandle) -> Router {
         .route("/health", get(handlers::health))
         .route("/api/v1/projects", get(handlers::list_projects))
         .route("/api/v1/projects", post(handlers::create_project))
+        .route(
+            "/api/v1/projects/{name}/suspend",
+            post(handlers::suspend_project),
+        )
+        .route(
+            "/api/v1/projects/{name}/resume",
+            post(handlers::resume_project),
+        )
+        .route(
+            "/api/v1/projects/{name}",
+            delete(handlers::delete_project),
+        )
         .route("/api/v1/deployments", get(handlers::list_deployments))
         .route("/api/v1/deploy", post(handlers::deploy))
         .route(
@@ -28,6 +40,18 @@ pub fn build(handle: OrchestratorHandle) -> Router {
         .route(
             "/api/v1/projects/{project}/deployments/{name}/logs",
             get(handlers::logs),
+        )
+        .route(
+            "/api/v1/projects/{project}/secrets",
+            get(handlers::list_secrets),
+        )
+        .route(
+            "/api/v1/projects/{project}/secrets/{name}",
+            post(handlers::set_secret),
+        )
+        .route(
+            "/api/v1/projects/{project}/secrets/{name}",
+            delete(handlers::delete_secret),
         )
         .layer(TraceLayer::new_for_http())
         .with_state(handle)
