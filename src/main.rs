@@ -47,7 +47,12 @@ async fn main() -> anyhow::Result<()> {
     info!("connected to Docker runtime");
 
     let handle = Orchestrator::spawn(Arc::new(runtime), Some(store));
-    let addr = format!("{}:{}", cli.host, cli.port);
 
+    // Spawn health checker background task
+    let health_checker = Arc::new(nexad::adapters::health::HealthChecker::new(handle.clone()));
+    tokio::spawn(async move { health_checker.run().await });
+    info!("health checker started");
+
+    let addr = format!("{}:{}", cli.host, cli.port);
     api::serve(handle, &addr).await
 }
