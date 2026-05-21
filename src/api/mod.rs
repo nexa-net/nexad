@@ -1,12 +1,10 @@
 mod handlers;
 mod routes;
 
-use std::sync::Arc;
+use nexa_core::domain::orchestrator::OrchestratorHandle;
 
-use crate::engine::Orchestrator;
-
-pub async fn serve(orchestrator: Arc<Orchestrator>, addr: &str) -> anyhow::Result<()> {
-    let app = routes::build(orchestrator);
+pub async fn serve(handle: OrchestratorHandle, addr: &str) -> anyhow::Result<()> {
+    let app = routes::build(handle);
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
     tracing::info!("nexad API listening on {addr}");

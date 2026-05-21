@@ -1,10 +1,13 @@
 mod adapters;
 mod api;
-mod engine;
+
+use std::sync::Arc;
 
 use clap::Parser;
 use tracing::info;
 use tracing_subscriber::EnvFilter;
+
+use nexa_core::domain::orchestrator::Orchestrator;
 
 #[derive(Parser)]
 #[command(name = "nexad", about = "NexaNet daemon", version)]
@@ -31,8 +34,12 @@ async fn main() -> anyhow::Result<()> {
 
     info!("starting nexad on {}:{}", cli.host, cli.port);
 
-    let orchestrator = engine::Orchestrator::new().await?;
+    let runtime = adapters::runtime::DockerRuntime::new()?;
+    runtime.ping().await?;
+    info!("connected to Docker runtime");
+
+    let handle = Orchestrator::spawn(Arc::new(runtime));
     let addr = format!("{}:{}", cli.host, cli.port);
 
-    api::serve(orchestrator, &addr).await
+    api::serve(handle, &addr).await
 }

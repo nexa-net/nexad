@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::sse::{Event, Sse};
@@ -8,20 +6,17 @@ use axum::Json;
 use futures::StreamExt;
 use serde::Deserialize;
 
-use crate::engine::Orchestrator;
 use nexa_core::config::parse_deployment;
-use nexa_core::domain::models::DeploymentSpec;
+use nexa_core::domain::orchestrator::OrchestratorHandle;
 
-type AppState = State<Arc<Orchestrator>>;
+type AppState = State<OrchestratorHandle>;
 
 pub async fn health() -> &'static str {
     "ok"
 }
 
-// --- Projects ---
-
-pub async fn list_projects(State(orch): AppState) -> impl IntoResponse {
-    Json(orch.list_projects())
+pub async fn list_projects(State(handle): AppState) -> impl IntoResponse {
+    Json(handle.list_projects().await)
 }
 
 #[derive(Deserialize)]
@@ -30,10 +25,10 @@ pub struct CreateProjectRequest {
 }
 
 pub async fn create_project(
-    State(orch): AppState,
+    State(handle): AppState,
     Json(req): Json<CreateProjectRequest>,
 ) -> impl IntoResponse {
-    match orch.create_project(&req.name) {
+    match handle.create_project(req.name).await {
         Ok(project) => (StatusCode::CREATED, Json(serde_json::json!(project))).into_response(),
         Err(e) => (
             StatusCode::CONFLICT,
@@ -43,22 +38,20 @@ pub async fn create_project(
     }
 }
 
-// --- Deployments ---
-
 #[derive(Deserialize)]
 pub struct DeploymentFilter {
     project: Option<String>,
 }
 
 pub async fn list_deployments(
-    State(orch): AppState,
+    State(handle): AppState,
     Query(filter): Query<DeploymentFilter>,
 ) -> impl IntoResponse {
-    Json(orch.list_deployments(filter.project.as_deref()))
+    Json(handle.list_deployments(filter.project).await)
 }
 
-pub async fn deploy(State(orch): AppState, body: String) -> impl IntoResponse {
-    let spec = match serde_json::from_str::<DeploymentSpec>(&body) {
+pub async fn deploy(State(handle): AppState, body: String) -> impl IntoResponse {
+    let spec = match serde_json::from_str(&body) {
         Ok(spec) => spec,
         Err(_) => match parse_deployment(&body) {
             Ok(spec) => spec,
@@ -72,7 +65,7 @@ pub async fn deploy(State(orch): AppState, body: String) -> impl IntoResponse {
         },
     };
 
-    match orch.deploy(spec).await {
+    match handle.deploy(spec).await {
         Ok(deployment) => (StatusCode::CREATED, Json(serde_json::json!(deployment))).into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -83,10 +76,10 @@ pub async fn deploy(State(orch): AppState, body: String) -> impl IntoResponse {
 }
 
 pub async fn stop_deployment(
-    State(orch): AppState,
+    State(handle): AppState,
     Path((project, name)): Path<(String, String)>,
 ) -> impl IntoResponse {
-    match orch.stop_deployment(&project, &name).await {
+    match handle.stop(project, name).await {
         Ok(()) => StatusCode::OK.into_response(),
         Err(e) => (
             StatusCode::NOT_FOUND,
@@ -97,10 +90,10 @@ pub async fn stop_deployment(
 }
 
 pub async fn remove_deployment(
-    State(orch): AppState,
+    State(handle): AppState,
     Path((project, name)): Path<(String, String)>,
 ) -> impl IntoResponse {
-    match orch.remove_deployment(&project, &name).await {
+    match handle.remove_deployment(project, name).await {
         Ok(()) => StatusCode::OK.into_response(),
         Err(e) => (
             StatusCode::NOT_FOUND,
@@ -116,11 +109,11 @@ pub struct ScaleRequest {
 }
 
 pub async fn scale_deployment(
-    State(orch): AppState,
+    State(handle): AppState,
     Path((project, name)): Path<(String, String)>,
     Json(req): Json<ScaleRequest>,
 ) -> impl IntoResponse {
-    match orch.scale_deployment(&project, &name, req.replicas).await {
+    match handle.scale(project, name, req.replicas).await {
         Ok(deployment) => Json(serde_json::json!(deployment)).into_response(),
         Err(e) => (
             StatusCode::NOT_FOUND,
@@ -130,16 +123,12 @@ pub async fn scale_deployment(
     }
 }
 
-// --- Pods ---
-
 pub async fn list_pods(
-    State(orch): AppState,
+    State(handle): AppState,
     Query(filter): Query<DeploymentFilter>,
 ) -> impl IntoResponse {
-    Json(orch.list_pods(filter.project.as_deref()))
+    Json(handle.list_pods(filter.project).await)
 }
-
-// --- Logs ---
 
 #[derive(Deserialize)]
 pub struct LogsQuery {
@@ -147,18 +136,19 @@ pub struct LogsQuery {
 }
 
 pub async fn logs(
-    State(orch): AppState,
+    State(handle): AppState,
     Path((project, name)): Path<(String, String)>,
     Query(query): Query<LogsQuery>,
 ) -> impl IntoResponse {
-    match orch.pod_logs(&project, &name, query.tail).await {
+    match handle.pod_logs(project, name, query.tail).await {
         Ok(stream) => {
-            let event_stream = stream.map(|result| -> std::result::Result<Event, std::convert::Infallible> {
-                match result {
-                    Ok(line) => Ok(Event::default().data(line)),
-                    Err(e) => Ok(Event::default().data(format!("error: {e}"))),
-                }
-            });
+            let event_stream =
+                stream.map(|result| -> std::result::Result<Event, std::convert::Infallible> {
+                    match result {
+                        Ok(line) => Ok(Event::default().data(line)),
+                        Err(e) => Ok(Event::default().data(format!("error: {e}"))),
+                    }
+                });
             Sse::new(event_stream).into_response()
         }
         Err(e) => (
