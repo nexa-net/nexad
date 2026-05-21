@@ -3,7 +3,8 @@ use sqlx::{Row, SqlitePool, sqlite::SqliteRow};
 use uuid::Uuid;
 
 use nexa_core::domain::models::{
-    Deployment, DeploymentSpec, DeploymentStatus, Pod, PodStatus, Project, ProjectStatus,
+    Deployment, DeploymentSpec, DeploymentStatus, Node, NodeResources, NodeRole, NodeStatus, Pod,
+    PodStatus, Project, ProjectStatus,
 };
 use nexa_core::error::{NexaError, Result};
 use nexa_core::ports::state::StateStore;
@@ -64,6 +65,56 @@ impl SqliteStore {
         })
     }
 
+    fn row_to_node(row: &SqliteRow) -> Result<Node> {
+        let id_str: String = row.get("id");
+        let id = id_str
+            .parse::<Uuid>()
+            .map_err(|e| NexaError::Runtime(format!("invalid node id: {e}")))?;
+
+        let role_str: String = row.get("role");
+        let role = role_str
+            .parse::<NodeRole>()
+            .map_err(|e| NexaError::Runtime(format!("invalid node role: {e}")))?;
+
+        let status_str: String = row.get("status");
+        let status = status_str
+            .parse::<NodeStatus>()
+            .map_err(|e| NexaError::Runtime(format!("invalid node status: {e}")))?;
+
+        let cpu_cores: f64 = row.get("cpu_cores");
+        let memory_bytes: i64 = row.get("memory_bytes");
+        let cpu_available: f64 = row.get("cpu_available");
+        let memory_available: i64 = row.get("memory_available");
+        let running_pods: i32 = row.get("running_pods");
+
+        let last_heartbeat_str: String = row.get("last_heartbeat");
+        let last_heartbeat = last_heartbeat_str
+            .parse()
+            .map_err(|e: chrono::ParseError| NexaError::Runtime(format!("invalid last_heartbeat: {e}")))?;
+
+        let joined_at_str: String = row.get("joined_at");
+        let joined_at = joined_at_str
+            .parse()
+            .map_err(|e: chrono::ParseError| NexaError::Runtime(format!("invalid joined_at: {e}")))?;
+
+        Ok(Node {
+            id,
+            name: row.get("name"),
+            address: row.get("address"),
+            role,
+            status,
+            resources: NodeResources {
+                cpu_cores,
+                memory_bytes: memory_bytes as u64,
+                cpu_available,
+                memory_available: memory_available as u64,
+                running_pods: running_pods as u32,
+            },
+            last_heartbeat,
+            joined_at,
+        })
+    }
+
     fn row_to_pod(row: &SqliteRow) -> Result<Pod> {
         let id_str: String = row.get("id");
         let id = id_str
@@ -88,12 +139,19 @@ impl SqliteStore {
         let replica_index: i64 = row.get("replica_index");
         let restart_count: i64 = row.get("restart_count");
 
+        let node_id_str: Option<String> = row.get("node_id");
+        let node_id = node_id_str
+            .map(|s| s.parse::<Uuid>())
+            .transpose()
+            .map_err(|e| NexaError::Runtime(format!("invalid node_id: {e}")))?;
+
         Ok(Pod {
             id,
             deployment_id,
             project: row.get("project"),
             deployment_name: row.get("deployment_name"),
             replica_index: replica_index as u32,
+            node_id,
             container_id: row.get("container_id"),
             container_ip: row.get("container_ip"),
             status,
@@ -305,14 +363,15 @@ impl StateStore for SqliteStore {
     async fn insert_pod(&self, pod: &Pod) -> Result<()> {
         sqlx::query(
             "INSERT INTO pods \
-             (id, deployment_id, project, deployment_name, replica_index, container_id, container_ip, status, image, restart_count, created_at) \
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+             (id, deployment_id, project, deployment_name, replica_index, node_id, container_id, container_ip, status, image, restart_count, created_at) \
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         )
         .bind(pod.id.to_string())
         .bind(pod.deployment_id.to_string())
         .bind(&pod.project)
         .bind(&pod.deployment_name)
         .bind(pod.replica_index as i64)
+        .bind(pod.node_id.map(|id| id.to_string()))
         .bind(&pod.container_id)
         .bind(&pod.container_ip)
         .bind(pod.status.to_string())
@@ -330,7 +389,7 @@ impl StateStore for SqliteStore {
         let rows = match project {
             Some(p) => {
                 sqlx::query(
-                    "SELECT id, deployment_id, project, deployment_name, replica_index, \
+                    "SELECT id, deployment_id, project, deployment_name, replica_index, node_id, \
                      container_id, container_ip, status, image, restart_count, created_at \
                      FROM pods WHERE project = ? ORDER BY created_at",
                 )
@@ -341,7 +400,7 @@ impl StateStore for SqliteStore {
             }
             None => {
                 sqlx::query(
-                    "SELECT id, deployment_id, project, deployment_name, replica_index, \
+                    "SELECT id, deployment_id, project, deployment_name, replica_index, node_id, \
                      container_id, container_ip, status, image, restart_count, created_at \
                      FROM pods ORDER BY created_at",
                 )
@@ -356,8 +415,9 @@ impl StateStore for SqliteStore {
 
     async fn update_pod(&self, pod: &Pod) -> Result<()> {
         let rows_affected = sqlx::query(
-            "UPDATE pods SET container_id = ?, container_ip = ?, status = ?, restart_count = ? WHERE id = ?",
+            "UPDATE pods SET node_id = ?, container_id = ?, container_ip = ?, status = ?, restart_count = ? WHERE id = ?",
         )
+        .bind(pod.node_id.map(|id| id.to_string()))
         .bind(&pod.container_id)
         .bind(&pod.container_ip)
         .bind(pod.status.to_string())
@@ -386,7 +446,7 @@ impl StateStore for SqliteStore {
 
     async fn pods_by_deployment(&self, deployment_id: &Uuid) -> Result<Vec<Pod>> {
         let rows = sqlx::query(
-            "SELECT id, deployment_id, project, deployment_name, replica_index, \
+            "SELECT id, deployment_id, project, deployment_name, replica_index, node_id, \
              container_id, container_ip, status, image, restart_count, created_at \
              FROM pods WHERE deployment_id = ? ORDER BY replica_index",
         )
@@ -397,6 +457,147 @@ impl StateStore for SqliteStore {
 
         rows.iter().map(|r| Self::row_to_pod(r)).collect()
     }
+
+    async fn insert_node(&self, node: &Node) -> Result<()> {
+        let result = sqlx::query(
+            "INSERT INTO nodes \
+             (id, name, address, role, status, cpu_cores, memory_bytes, cpu_available, memory_available, running_pods, last_heartbeat, joined_at) \
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        )
+        .bind(node.id.to_string())
+        .bind(&node.name)
+        .bind(&node.address)
+        .bind(node.role.to_string())
+        .bind(node.status.to_string())
+        .bind(node.resources.cpu_cores)
+        .bind(node.resources.memory_bytes as i64)
+        .bind(node.resources.cpu_available)
+        .bind(node.resources.memory_available as i64)
+        .bind(node.resources.running_pods as i32)
+        .bind(node.last_heartbeat.to_rfc3339())
+        .bind(node.joined_at.to_rfc3339())
+        .execute(&self.pool)
+        .await;
+
+        match result {
+            Ok(_) => Ok(()),
+            Err(sqlx::Error::Database(e)) if e.is_unique_violation() => {
+                Err(NexaError::InvalidSpec(format!(
+                    "node '{}' already exists",
+                    node.name
+                )))
+            }
+            Err(e) => Err(NexaError::Runtime(e.to_string())),
+        }
+    }
+
+    async fn get_node(&self, id: &Uuid) -> Result<Option<Node>> {
+        let row = sqlx::query(
+            "SELECT id, name, address, role, status, cpu_cores, memory_bytes, \
+             cpu_available, memory_available, running_pods, last_heartbeat, joined_at \
+             FROM nodes WHERE id = ?",
+        )
+        .bind(id.to_string())
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| NexaError::Runtime(e.to_string()))?;
+
+        match row {
+            None => Ok(None),
+            Some(r) => Ok(Some(Self::row_to_node(&r)?)),
+        }
+    }
+
+    async fn get_node_by_name(&self, name: &str) -> Result<Option<Node>> {
+        let row = sqlx::query(
+            "SELECT id, name, address, role, status, cpu_cores, memory_bytes, \
+             cpu_available, memory_available, running_pods, last_heartbeat, joined_at \
+             FROM nodes WHERE name = ?",
+        )
+        .bind(name)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| NexaError::Runtime(e.to_string()))?;
+
+        match row {
+            None => Ok(None),
+            Some(r) => Ok(Some(Self::row_to_node(&r)?)),
+        }
+    }
+
+    async fn list_nodes(&self) -> Result<Vec<Node>> {
+        let rows = sqlx::query(
+            "SELECT id, name, address, role, status, cpu_cores, memory_bytes, \
+             cpu_available, memory_available, running_pods, last_heartbeat, joined_at \
+             FROM nodes ORDER BY name",
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| NexaError::Runtime(e.to_string()))?;
+
+        rows.iter().map(|r| Self::row_to_node(r)).collect()
+    }
+
+    async fn update_node(&self, node: &Node) -> Result<()> {
+        let rows_affected = sqlx::query(
+            "UPDATE nodes SET name = ?, address = ?, role = ?, status = ?, \
+             cpu_cores = ?, memory_bytes = ?, cpu_available = ?, memory_available = ?, \
+             running_pods = ?, last_heartbeat = ? WHERE id = ?",
+        )
+        .bind(&node.name)
+        .bind(&node.address)
+        .bind(node.role.to_string())
+        .bind(node.status.to_string())
+        .bind(node.resources.cpu_cores)
+        .bind(node.resources.memory_bytes as i64)
+        .bind(node.resources.cpu_available)
+        .bind(node.resources.memory_available as i64)
+        .bind(node.resources.running_pods as i32)
+        .bind(node.last_heartbeat.to_rfc3339())
+        .bind(node.id.to_string())
+        .execute(&self.pool)
+        .await
+        .map_err(|e| NexaError::Runtime(e.to_string()))?
+        .rows_affected();
+
+        if rows_affected == 0 {
+            Err(NexaError::NodeNotFound(node.id.to_string()))
+        } else {
+            Ok(())
+        }
+    }
+
+    async fn delete_node(&self, id: &Uuid) -> Result<()> {
+        sqlx::query("DELETE FROM nodes WHERE id = ?")
+            .bind(id.to_string())
+            .execute(&self.pool)
+            .await
+            .map_err(|e| NexaError::Runtime(e.to_string()))?;
+        Ok(())
+    }
+
+    async fn get_cluster_config(&self, key: &str) -> Result<Option<String>> {
+        let row = sqlx::query("SELECT value FROM cluster_config WHERE key = ?")
+            .bind(key)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(|e| NexaError::Runtime(e.to_string()))?;
+
+        Ok(row.map(|r| r.get("value")))
+    }
+
+    async fn set_cluster_config(&self, key: &str, value: &str) -> Result<()> {
+        sqlx::query(
+            "INSERT INTO cluster_config (key, value) VALUES (?, ?) \
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        )
+        .bind(key)
+        .bind(value)
+        .execute(&self.pool)
+        .await
+        .map_err(|e| NexaError::Runtime(e.to_string()))?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -404,8 +605,8 @@ mod tests {
     use std::collections::HashMap;
 
     use nexa_core::domain::models::{
-        Deployment, DeploymentMeta, DeploymentSpec, DeploymentStatus, Pod, PodStatus, Project,
-        ProjectStatus, RestartPolicy,
+        Deployment, DeploymentMeta, DeploymentSpec, DeploymentStatus, Node, NodeResources,
+        NodeRole, NodeStatus, Pod, PodStatus, Project, ProjectStatus, RestartPolicy,
     };
     use nexa_core::ports::state::StateStore;
 
@@ -607,5 +808,147 @@ mod tests {
 
         let all_pods = store.list_pods(None).await.unwrap();
         assert_eq!(all_pods.len(), 3);
+    }
+
+    // ---- Node tests ----
+
+    fn sample_resources() -> NodeResources {
+        NodeResources {
+            cpu_cores: 4.0,
+            memory_bytes: 8_589_934_592,
+            cpu_available: 3.5,
+            memory_available: 7_000_000_000,
+            running_pods: 2,
+        }
+    }
+
+    #[tokio::test]
+    async fn node_insert_and_get() {
+        let store = setup_store().await;
+        let node = Node::new(
+            "worker-1".into(),
+            "192.168.1.1:9000".into(),
+            NodeRole::Worker,
+            sample_resources(),
+        );
+        let node_id = node.id;
+
+        store.insert_node(&node).await.unwrap();
+        let fetched = store.get_node(&node_id).await.unwrap();
+
+        assert!(fetched.is_some());
+        let n = fetched.unwrap();
+        assert_eq!(n.name, "worker-1");
+        assert_eq!(n.address, "192.168.1.1:9000");
+        assert_eq!(n.role, NodeRole::Worker);
+        assert_eq!(n.status, NodeStatus::Ready);
+        assert_eq!(n.resources.cpu_cores, 4.0);
+        assert_eq!(n.resources.memory_bytes, 8_589_934_592);
+        assert_eq!(n.resources.running_pods, 2);
+    }
+
+    #[tokio::test]
+    async fn node_get_by_name() {
+        let store = setup_store().await;
+        let node = Node::new(
+            "master-1".into(),
+            "10.0.0.1:9000".into(),
+            NodeRole::Master,
+            sample_resources(),
+        );
+        store.insert_node(&node).await.unwrap();
+
+        let fetched = store.get_node_by_name("master-1").await.unwrap();
+        assert!(fetched.is_some());
+        assert_eq!(fetched.unwrap().id, node.id);
+
+        let missing = store.get_node_by_name("nonexistent").await.unwrap();
+        assert!(missing.is_none());
+    }
+
+    #[tokio::test]
+    async fn node_list() {
+        let store = setup_store().await;
+        let n1 = Node::new("w1".into(), "10.0.0.1:9000".into(), NodeRole::Worker, sample_resources());
+        let n2 = Node::new("w2".into(), "10.0.0.2:9000".into(), NodeRole::Worker, sample_resources());
+
+        store.insert_node(&n1).await.unwrap();
+        store.insert_node(&n2).await.unwrap();
+
+        let all = store.list_nodes().await.unwrap();
+        assert_eq!(all.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn node_update() {
+        let store = setup_store().await;
+        let mut node = Node::new(
+            "worker-1".into(),
+            "10.0.0.1:9000".into(),
+            NodeRole::Worker,
+            sample_resources(),
+        );
+        store.insert_node(&node).await.unwrap();
+
+        node.status = NodeStatus::Draining;
+        node.resources.running_pods = 0;
+        store.update_node(&node).await.unwrap();
+
+        let fetched = store.get_node(&node.id).await.unwrap().unwrap();
+        assert_eq!(fetched.status, NodeStatus::Draining);
+        assert_eq!(fetched.resources.running_pods, 0);
+    }
+
+    #[tokio::test]
+    async fn node_update_not_found() {
+        let store = setup_store().await;
+        let phantom = Node::new("ghost".into(), "0.0.0.0:0".into(), NodeRole::Worker, sample_resources());
+        let result = store.update_node(&phantom).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn node_delete() {
+        let store = setup_store().await;
+        let node = Node::new("w1".into(), "10.0.0.1:9000".into(), NodeRole::Worker, sample_resources());
+        let node_id = node.id;
+
+        store.insert_node(&node).await.unwrap();
+        store.delete_node(&node_id).await.unwrap();
+
+        let fetched = store.get_node(&node_id).await.unwrap();
+        assert!(fetched.is_none());
+    }
+
+    #[tokio::test]
+    async fn node_duplicate_name_fails() {
+        let store = setup_store().await;
+        let n1 = Node::new("worker-1".into(), "10.0.0.1:9000".into(), NodeRole::Worker, sample_resources());
+        let n2 = Node::new("worker-1".into(), "10.0.0.2:9000".into(), NodeRole::Worker, sample_resources());
+
+        store.insert_node(&n1).await.unwrap();
+        let result = store.insert_node(&n2).await;
+        assert!(result.is_err());
+    }
+
+    // ---- Cluster config tests ----
+
+    #[tokio::test]
+    async fn cluster_config_roundtrip() {
+        let store = setup_store().await;
+
+        // Initially empty
+        let val = store.get_cluster_config("leader_id").await.unwrap();
+        assert!(val.is_none());
+
+        // Set and get
+        store.set_cluster_config("leader_id", "node-abc").await.unwrap();
+        let val = store.get_cluster_config("leader_id").await.unwrap();
+        assert_eq!(val.as_deref(), Some("node-abc"));
+
+        // Overwrite
+        store.set_cluster_config("leader_id", "node-xyz").await.unwrap();
+        let val = store.get_cluster_config("leader_id").await.unwrap();
+        assert_eq!(val.as_deref(), Some("node-xyz"));
     }
 }
