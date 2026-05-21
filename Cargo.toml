@@ -7,6 +7,10 @@ license = "Apache-2.0"
 repository = "https://github.com/nexa-net/nexad"
 rust-version = "1.85"
 
+[lib]
+name = "nexad"
+path = "src/lib.rs"
+
 [[bin]]
 name = "nexad"
 path = "src/main.rs"
@@ -31,3 +35,6 @@ async-trait = "0.1"
 futures = "0.3"
 clap = { version = "4", features = ["derive"] }
 sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite"] }
+
+[dev-dependencies]
+tempfile = "3"

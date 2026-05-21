@@ -1,4 +1,3 @@
-mod adapters;
 mod api;
 
 use std::sync::Arc;
@@ -8,6 +7,7 @@ use tracing::info;
 use tracing_subscriber::EnvFilter;
 
 use nexa_core::domain::orchestrator::Orchestrator;
+use nexa_core::ports::state::StateStore;
 
 #[derive(Parser)]
 #[command(name = "nexad", about = "NexaNet daemon", version)]
@@ -34,11 +34,19 @@ async fn main() -> anyhow::Result<()> {
 
     info!("starting nexad on {}:{}", cli.host, cli.port);
 
-    let runtime = adapters::runtime::DockerRuntime::new()?;
+    std::fs::create_dir_all(&cli.data_dir)?;
+
+    let db_path = format!("{}/nexa.db", cli.data_dir);
+    let database_url = format!("sqlite:{}?mode=rwc", db_path);
+    let store = nexad::adapters::state::SqliteStore::connect(&database_url).await?;
+    let store: Arc<dyn StateStore> = Arc::new(store);
+    info!(path = db_path, "state store initialized");
+
+    let runtime = nexad::adapters::runtime::DockerRuntime::new()?;
     runtime.ping().await?;
     info!("connected to Docker runtime");
 
-    let handle = Orchestrator::spawn(Arc::new(runtime));
+    let handle = Orchestrator::spawn(Arc::new(runtime), Some(store));
     let addr = format!("{}:{}", cli.host, cli.port);
 
     api::serve(handle, &addr).await
