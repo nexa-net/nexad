@@ -259,4 +259,62 @@ impl ContainerRuntime for DockerRuntime {
 
         Ok(ip)
     }
+
+    async fn events(&self) -> Result<EventStream> {
+        use std::collections::HashMap as StdHashMap;
+        use bollard::system::EventsOptions;
+
+        let mut filters = StdHashMap::new();
+        filters.insert("type".to_string(), vec!["container".to_string()]);
+        filters.insert(
+            "event".to_string(),
+            vec!["die".to_string(), "start".to_string(), "oom".to_string()],
+        );
+        filters.insert(
+            "label".to_string(),
+            vec!["managed-by=nexanet".to_string()],
+        );
+
+        let options = EventsOptions::<String> {
+            since: None,
+            until: None,
+            filters,
+        };
+
+        let stream = self.client.events(Some(options));
+
+        let mapped = stream.filter_map(|result| async move {
+            match result {
+                Ok(event) => {
+                    let action = event.action.as_deref().unwrap_or("");
+                    let actor = event.actor.as_ref();
+                    let container_id = actor
+                        .and_then(|a| a.attributes.as_ref())
+                        .and_then(|attrs| attrs.get("nexa.pod-id"))
+                        .cloned()
+                        .unwrap_or_default();
+
+                    match action {
+                        "die" => {
+                            let exit_code = actor
+                                .and_then(|a| a.attributes.as_ref())
+                                .and_then(|attrs| attrs.get("exitCode"))
+                                .and_then(|code| code.parse::<i64>().ok())
+                                .unwrap_or(-1);
+                            Some(RuntimeEvent::ContainerDied { container_id, exit_code })
+                        }
+                        "start" => Some(RuntimeEvent::ContainerStarted { container_id }),
+                        "oom" => Some(RuntimeEvent::ContainerOom { container_id }),
+                        _ => None,
+                    }
+                }
+                Err(e) => {
+                    tracing::error!(error = %e, "error in Docker event stream");
+                    None
+                }
+            }
+        });
+
+        Ok(Box::pin(mapped))
+    }
 }
