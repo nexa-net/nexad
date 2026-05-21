@@ -1,5 +1,6 @@
 mod api;
 
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use clap::Parser;
@@ -7,6 +8,7 @@ use tracing::info;
 use tracing_subscriber::EnvFilter;
 
 use nexa_core::domain::orchestrator::Orchestrator;
+use nexa_core::ports::secrets::SecretStore;
 use nexa_core::ports::state::StateStore;
 
 #[derive(Parser)]
@@ -36,18 +38,32 @@ async fn main() -> anyhow::Result<()> {
 
     std::fs::create_dir_all(&cli.data_dir)?;
 
+    let data_dir = PathBuf::from(&cli.data_dir);
+
     let db_path = format!("{}/nexa.db", cli.data_dir);
     let database_url = format!("sqlite:{}?mode=rwc", db_path);
     let store = nexad::adapters::state::SqliteStore::connect(&database_url).await?;
     let store: Arc<dyn StateStore> = Arc::new(store);
     info!(path = db_path, "state store initialized");
 
+    // Load or generate master encryption key
+    let master_key = nexad::crypto::master_key::load_or_generate(&data_dir)?;
+    info!("master key loaded");
+
+    // Create encrypted secret store
+    let secret_conn = rusqlite::Connection::open(format!("{}/secrets.db", cli.data_dir))
+        .map_err(|e| anyhow::anyhow!("failed to open secrets db: {e}"))?;
+    let secret_store: Arc<dyn SecretStore> = Arc::new(
+        nexad::adapters::secrets::EncryptedSqliteSecretStore::new(secret_conn, &master_key)?,
+    );
+    info!("secret store initialized");
+
     let runtime = nexad::adapters::runtime::DockerRuntime::new()?;
     runtime.ping().await?;
     info!("connected to Docker runtime");
 
     let runtime: Arc<dyn nexa_core::ports::runtime::ContainerRuntime> = Arc::new(runtime);
-    let handle = Orchestrator::spawn(Arc::clone(&runtime), Some(store));
+    let handle = Orchestrator::spawn(Arc::clone(&runtime), Some(store), Some(secret_store));
 
     // Spawn health checker background task
     let health_checker = Arc::new(nexad::adapters::health::HealthChecker::new(handle.clone()));
