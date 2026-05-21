@@ -10,7 +10,7 @@ use serde::Deserialize;
 
 use crate::engine::Orchestrator;
 use nexa_core::config::parse_deployment;
-use nexa_core::models::DeploymentSpec;
+use nexa_core::domain::models::DeploymentSpec;
 
 type AppState = State<Arc<Orchestrator>>;
 

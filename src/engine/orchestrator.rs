@@ -2,8 +2,9 @@ use std::sync::Arc;
 
 use dashmap::DashMap;
 use nexa_core::error::{NexaError, Result};
-use nexa_core::models::*;
-use nexa_core::runtime::*;
+use nexa_core::domain::models::*;
+use nexa_core::ports::runtime::*;
+use crate::adapters::runtime::DockerRuntime;
 use tokio::sync::RwLock;
 use tracing::{error, info, warn};
 use uuid::Uuid;
