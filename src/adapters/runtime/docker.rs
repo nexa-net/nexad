@@ -240,4 +240,23 @@ impl ContainerRuntime for DockerRuntime {
         debug!(container_id, network, "connected to network");
         Ok(())
     }
+
+    async fn container_ip(&self, container_id: &str, network: &str) -> Result<String> {
+        let info = self.client
+            .inspect_container(container_id, None)
+            .await
+            .map_err(|e| NexaError::Runtime(e.to_string()))?;
+
+        let ip = info
+            .network_settings
+            .and_then(|ns| ns.networks)
+            .and_then(|mut nets| nets.remove(network))
+            .and_then(|ep| ep.ip_address)
+            .filter(|ip| !ip.is_empty())
+            .ok_or_else(|| NexaError::Runtime(
+                format!("no IP found for container {container_id} on network {network}")
+            ))?;
+
+        Ok(ip)
+    }
 }

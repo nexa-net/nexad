@@ -95,6 +95,7 @@ impl SqliteStore {
             deployment_name: row.get("deployment_name"),
             replica_index: replica_index as u32,
             container_id: row.get("container_id"),
+            container_ip: row.get("container_ip"),
             status,
             image: row.get("image"),
             restart_count: restart_count as u32,
@@ -304,8 +305,8 @@ impl StateStore for SqliteStore {
     async fn insert_pod(&self, pod: &Pod) -> Result<()> {
         sqlx::query(
             "INSERT INTO pods \
-             (id, deployment_id, project, deployment_name, replica_index, container_id, status, image, restart_count, created_at) \
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+             (id, deployment_id, project, deployment_name, replica_index, container_id, container_ip, status, image, restart_count, created_at) \
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         )
         .bind(pod.id.to_string())
         .bind(pod.deployment_id.to_string())
@@ -313,6 +314,7 @@ impl StateStore for SqliteStore {
         .bind(&pod.deployment_name)
         .bind(pod.replica_index as i64)
         .bind(&pod.container_id)
+        .bind(&pod.container_ip)
         .bind(pod.status.to_string())
         .bind(&pod.image)
         .bind(pod.restart_count as i64)
@@ -329,7 +331,7 @@ impl StateStore for SqliteStore {
             Some(p) => {
                 sqlx::query(
                     "SELECT id, deployment_id, project, deployment_name, replica_index, \
-                     container_id, status, image, restart_count, created_at \
+                     container_id, container_ip, status, image, restart_count, created_at \
                      FROM pods WHERE project = ? ORDER BY created_at",
                 )
                 .bind(p)
@@ -340,7 +342,7 @@ impl StateStore for SqliteStore {
             None => {
                 sqlx::query(
                     "SELECT id, deployment_id, project, deployment_name, replica_index, \
-                     container_id, status, image, restart_count, created_at \
+                     container_id, container_ip, status, image, restart_count, created_at \
                      FROM pods ORDER BY created_at",
                 )
                 .fetch_all(&self.pool)
@@ -354,9 +356,10 @@ impl StateStore for SqliteStore {
 
     async fn update_pod(&self, pod: &Pod) -> Result<()> {
         let rows_affected = sqlx::query(
-            "UPDATE pods SET container_id = ?, status = ?, restart_count = ? WHERE id = ?",
+            "UPDATE pods SET container_id = ?, container_ip = ?, status = ?, restart_count = ? WHERE id = ?",
         )
         .bind(&pod.container_id)
+        .bind(&pod.container_ip)
         .bind(pod.status.to_string())
         .bind(pod.restart_count as i64)
         .bind(pod.id.to_string())
@@ -384,7 +387,7 @@ impl StateStore for SqliteStore {
     async fn pods_by_deployment(&self, deployment_id: &Uuid) -> Result<Vec<Pod>> {
         let rows = sqlx::query(
             "SELECT id, deployment_id, project, deployment_name, replica_index, \
-             container_id, status, image, restart_count, created_at \
+             container_id, container_ip, status, image, restart_count, created_at \
              FROM pods WHERE deployment_id = ? ORDER BY replica_index",
         )
         .bind(deployment_id.to_string())
