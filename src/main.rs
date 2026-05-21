@@ -46,12 +46,20 @@ async fn main() -> anyhow::Result<()> {
     runtime.ping().await?;
     info!("connected to Docker runtime");
 
-    let handle = Orchestrator::spawn(Arc::new(runtime), Some(store));
+    let runtime: Arc<dyn nexa_core::ports::runtime::ContainerRuntime> = Arc::new(runtime);
+    let handle = Orchestrator::spawn(Arc::clone(&runtime), Some(store));
 
     // Spawn health checker background task
     let health_checker = Arc::new(nexad::adapters::health::HealthChecker::new(handle.clone()));
     tokio::spawn(async move { health_checker.run().await });
     info!("health checker started");
+
+    // Start container event watcher
+    nexad::adapters::event_watcher::spawn_event_watcher(
+        Arc::clone(&runtime),
+        handle.command_sender(),
+    );
+    info!("container event watcher started");
 
     let addr = format!("{}:{}", cli.host, cli.port);
     api::serve(handle, &addr).await
