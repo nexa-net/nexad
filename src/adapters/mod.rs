@@ -6,4 +6,5 @@ pub mod proxy;
 pub mod runtime;
 pub mod secrets;
 pub mod state;
+pub mod tls;
 pub mod transport;
