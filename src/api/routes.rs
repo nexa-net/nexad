@@ -3,9 +3,9 @@ use axum::Router;
 use tower_http::trace::TraceLayer;
 
 use super::handlers;
-use nexa_core::domain::orchestrator::OrchestratorHandle;
+use super::AppState;
 
-pub fn build(handle: OrchestratorHandle) -> Router {
+pub fn build(state: AppState) -> Router {
     Router::new()
         .route("/health", get(handlers::health))
         .route("/api/v1/projects", get(handlers::list_projects))
@@ -53,6 +53,20 @@ pub fn build(handle: OrchestratorHandle) -> Router {
             "/api/v1/projects/{project}/secrets/{name}",
             delete(handlers::delete_secret),
         )
+        // Cluster management routes
+        .route("/api/v1/cluster/init", post(handlers::cluster_init))
+        .route("/api/v1/cluster/token", get(handlers::cluster_token_show))
+        .route(
+            "/api/v1/cluster/token/rotate",
+            post(handlers::cluster_token_rotate),
+        )
+        // Node management routes
+        .route("/api/v1/nodes", get(handlers::list_nodes))
+        .route(
+            "/api/v1/nodes/{name}/drain",
+            post(handlers::drain_node),
+        )
+        .route("/api/v1/nodes/{name}", delete(handlers::remove_node))
         .layer(TraceLayer::new_for_http())
-        .with_state(handle)
+        .with_state(state)
 }

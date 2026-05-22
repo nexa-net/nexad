@@ -142,7 +142,7 @@ async fn start_single_node(cli: &Cli) -> anyhow::Result<()> {
     let handle = spawn_orchestrator(&runtime, &store, secret_store);
 
     let addr = format!("{}:{}", cli.host, cli.port);
-    api::serve(handle, &addr).await
+    api::serve(handle, Arc::clone(&store), &addr).await
 }
 
 // ────────────────────── master mode ──────────────────────
@@ -221,7 +221,7 @@ async fn start_master(cli: &Cli) -> anyhow::Result<()> {
 
     // Start the HTTP API (blocks).
     let addr = format!("{}:{}", cli.host, cli.port);
-    api::serve(handle, &addr).await
+    api::serve(handle, Arc::clone(&store), &addr).await
 }
 
 // ────────────────────── worker mode ──────────────────────

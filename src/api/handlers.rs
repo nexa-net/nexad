@@ -7,17 +7,18 @@ use futures::StreamExt;
 use serde::Deserialize;
 
 use nexa_core::config::parse_deployment;
-use nexa_core::domain::orchestrator::OrchestratorHandle;
 use nexa_core::error::NexaError;
 
-type AppState = State<OrchestratorHandle>;
+use super::AppState as SharedState;
+
+type AppStateExtractor = State<SharedState>;
 
 pub async fn health() -> &'static str {
     "ok"
 }
 
-pub async fn list_projects(State(handle): AppState) -> impl IntoResponse {
-    Json(handle.list_projects().await)
+pub async fn list_projects(State(state): AppStateExtractor) -> impl IntoResponse {
+    Json(state.handle.list_projects().await)
 }
 
 #[derive(Deserialize)]
@@ -26,10 +27,10 @@ pub struct CreateProjectRequest {
 }
 
 pub async fn create_project(
-    State(handle): AppState,
+    State(state): AppStateExtractor,
     Json(req): Json<CreateProjectRequest>,
 ) -> impl IntoResponse {
-    match handle.create_project(req.name).await {
+    match state.handle.create_project(req.name).await {
         Ok(project) => (StatusCode::CREATED, Json(serde_json::json!(project))).into_response(),
         Err(e) => (
             StatusCode::CONFLICT,
@@ -45,13 +46,13 @@ pub struct DeploymentFilter {
 }
 
 pub async fn list_deployments(
-    State(handle): AppState,
+    State(state): AppStateExtractor,
     Query(filter): Query<DeploymentFilter>,
 ) -> impl IntoResponse {
-    Json(handle.list_deployments(filter.project).await)
+    Json(state.handle.list_deployments(filter.project).await)
 }
 
-pub async fn deploy(State(handle): AppState, body: String) -> impl IntoResponse {
+pub async fn deploy(State(state): AppStateExtractor, body: String) -> impl IntoResponse {
     let spec = match serde_json::from_str(&body) {
         Ok(spec) => spec,
         Err(_) => match parse_deployment(&body) {
@@ -66,7 +67,7 @@ pub async fn deploy(State(handle): AppState, body: String) -> impl IntoResponse 
         },
     };
 
-    match handle.deploy(spec).await {
+    match state.handle.deploy(spec).await {
         Ok(deployment) => (StatusCode::CREATED, Json(serde_json::json!(deployment))).into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -77,10 +78,10 @@ pub async fn deploy(State(handle): AppState, body: String) -> impl IntoResponse 
 }
 
 pub async fn stop_deployment(
-    State(handle): AppState,
+    State(state): AppStateExtractor,
     Path((project, name)): Path<(String, String)>,
 ) -> impl IntoResponse {
-    match handle.stop(project, name).await {
+    match state.handle.stop(project, name).await {
         Ok(()) => StatusCode::OK.into_response(),
         Err(e) => (
             StatusCode::NOT_FOUND,
@@ -91,10 +92,10 @@ pub async fn stop_deployment(
 }
 
 pub async fn remove_deployment(
-    State(handle): AppState,
+    State(state): AppStateExtractor,
     Path((project, name)): Path<(String, String)>,
 ) -> impl IntoResponse {
-    match handle.remove_deployment(project, name).await {
+    match state.handle.remove_deployment(project, name).await {
         Ok(()) => StatusCode::OK.into_response(),
         Err(e) => (
             StatusCode::NOT_FOUND,
@@ -110,11 +111,11 @@ pub struct ScaleRequest {
 }
 
 pub async fn scale_deployment(
-    State(handle): AppState,
+    State(state): AppStateExtractor,
     Path((project, name)): Path<(String, String)>,
     Json(req): Json<ScaleRequest>,
 ) -> impl IntoResponse {
-    match handle.scale(project, name, req.replicas).await {
+    match state.handle.scale(project, name, req.replicas).await {
         Ok(deployment) => Json(serde_json::json!(deployment)).into_response(),
         Err(e) => (
             StatusCode::NOT_FOUND,
@@ -125,10 +126,10 @@ pub async fn scale_deployment(
 }
 
 pub async fn list_pods(
-    State(handle): AppState,
+    State(state): AppStateExtractor,
     Query(filter): Query<DeploymentFilter>,
 ) -> impl IntoResponse {
-    Json(handle.list_pods(filter.project).await)
+    Json(state.handle.list_pods(filter.project).await)
 }
 
 #[derive(Deserialize)]
@@ -137,11 +138,11 @@ pub struct LogsQuery {
 }
 
 pub async fn logs(
-    State(handle): AppState,
+    State(state): AppStateExtractor,
     Path((project, name)): Path<(String, String)>,
     Query(query): Query<LogsQuery>,
 ) -> impl IntoResponse {
-    match handle.pod_logs(project, name, query.tail).await {
+    match state.handle.pod_logs(project, name, query.tail).await {
         Ok(stream) => {
             let event_stream =
                 stream.map(|result| -> std::result::Result<Event, std::convert::Infallible> {
@@ -163,10 +164,10 @@ pub async fn logs(
 // ---- Project lifecycle handlers ----
 
 pub async fn suspend_project(
-    State(handle): AppState,
+    State(state): AppStateExtractor,
     Path(name): Path<String>,
 ) -> impl IntoResponse {
-    match handle.suspend_project(name).await {
+    match state.handle.suspend_project(name).await {
         Ok(()) => StatusCode::OK.into_response(),
         Err(e) => (
             StatusCode::NOT_FOUND,
@@ -177,10 +178,10 @@ pub async fn suspend_project(
 }
 
 pub async fn resume_project(
-    State(handle): AppState,
+    State(state): AppStateExtractor,
     Path(name): Path<String>,
 ) -> impl IntoResponse {
-    match handle.resume_project(name).await {
+    match state.handle.resume_project(name).await {
         Ok(()) => StatusCode::OK.into_response(),
         Err(e) => (
             StatusCode::NOT_FOUND,
@@ -191,10 +192,10 @@ pub async fn resume_project(
 }
 
 pub async fn delete_project(
-    State(handle): AppState,
+    State(state): AppStateExtractor,
     Path(name): Path<String>,
 ) -> impl IntoResponse {
-    match handle.delete_project(name).await {
+    match state.handle.delete_project(name).await {
         Ok(()) => StatusCode::OK.into_response(),
         Err(e) => {
             let status = match &e {
@@ -209,10 +210,10 @@ pub async fn delete_project(
 // ---- Secrets handlers ----
 
 pub async fn list_secrets(
-    State(handle): AppState,
+    State(state): AppStateExtractor,
     Path(project): Path<String>,
 ) -> impl IntoResponse {
-    match handle.list_secrets(project).await {
+    match state.handle.list_secrets(project).await {
         Ok(names) => Json(serde_json::json!(names)).into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -228,11 +229,11 @@ pub struct SetSecretRequest {
 }
 
 pub async fn set_secret(
-    State(handle): AppState,
+    State(state): AppStateExtractor,
     Path((project, name)): Path<(String, String)>,
     Json(req): Json<SetSecretRequest>,
 ) -> impl IntoResponse {
-    match handle.set_secret(project, name, req.value.into_bytes()).await {
+    match state.handle.set_secret(project, name, req.value.into_bytes()).await {
         Ok(()) => StatusCode::OK.into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -243,11 +244,145 @@ pub async fn set_secret(
 }
 
 pub async fn delete_secret(
-    State(handle): AppState,
+    State(state): AppStateExtractor,
     Path((project, name)): Path<(String, String)>,
 ) -> impl IntoResponse {
-    match handle.delete_secret(project, name).await {
+    match state.handle.delete_secret(project, name).await {
         Ok(()) => StatusCode::OK.into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": e.to_string() })),
+        )
+            .into_response(),
+    }
+}
+
+// ---- Cluster management handlers ----
+
+pub async fn cluster_init(State(state): AppStateExtractor) -> impl IntoResponse {
+    let token = nexad::cluster::token::generate_token();
+    let hash = nexad::cluster::token::hash_token(&token);
+    match state.store.set_cluster_config("join_token_hash", &hash).await {
+        Ok(()) => {
+            let _ = state.store.set_cluster_config("join_token", &token).await;
+            Json(serde_json::json!({ "token": token })).into_response()
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": e.to_string() })),
+        )
+            .into_response(),
+    }
+}
+
+pub async fn cluster_token_show(State(state): AppStateExtractor) -> impl IntoResponse {
+    match state.store.get_cluster_config("join_token").await {
+        Ok(Some(token)) => Json(serde_json::json!({ "token": token })).into_response(),
+        Ok(None) => (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({ "error": "cluster not initialized" })),
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": e.to_string() })),
+        )
+            .into_response(),
+    }
+}
+
+pub async fn cluster_token_rotate(State(state): AppStateExtractor) -> impl IntoResponse {
+    let token = nexad::cluster::token::generate_token();
+    let hash = nexad::cluster::token::hash_token(&token);
+    match state.store.set_cluster_config("join_token_hash", &hash).await {
+        Ok(()) => {
+            let _ = state.store.set_cluster_config("join_token", &token).await;
+            Json(serde_json::json!({ "token": token })).into_response()
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": e.to_string() })),
+        )
+            .into_response(),
+    }
+}
+
+// ---- Node management handlers ----
+
+pub async fn list_nodes(State(state): AppStateExtractor) -> impl IntoResponse {
+    match state.store.list_nodes().await {
+        Ok(nodes) => Json(nodes).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": e.to_string() })),
+        )
+            .into_response(),
+    }
+}
+
+pub async fn drain_node(
+    State(state): AppStateExtractor,
+    Path(name): Path<String>,
+) -> impl IntoResponse {
+    match state.store.get_node_by_name(&name).await {
+        Ok(Some(mut node)) => {
+            node.status = nexa_core::domain::models::NodeStatus::Draining;
+            match state.store.update_node(&node).await {
+                Ok(()) => StatusCode::OK.into_response(),
+                Err(e) => (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(serde_json::json!({ "error": e.to_string() })),
+                )
+                    .into_response(),
+            }
+        }
+        Ok(None) => (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({ "error": format!("node '{}' not found", name) })),
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": e.to_string() })),
+        )
+            .into_response(),
+    }
+}
+
+pub async fn remove_node(
+    State(state): AppStateExtractor,
+    Path(name): Path<String>,
+) -> impl IntoResponse {
+    match state.store.get_node_by_name(&name).await {
+        Ok(Some(node)) => {
+            if node.status != nexa_core::domain::models::NodeStatus::Draining
+                && node.role != nexa_core::domain::models::NodeRole::Master
+            {
+                return (
+                    StatusCode::CONFLICT,
+                    Json(serde_json::json!({
+                        "error": format!(
+                            "node '{}' must be drained before removal (status: {})",
+                            name, node.status
+                        )
+                    })),
+                )
+                    .into_response();
+            }
+            match state.store.delete_node(&node.id).await {
+                Ok(()) => StatusCode::OK.into_response(),
+                Err(e) => (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(serde_json::json!({ "error": e.to_string() })),
+                )
+                    .into_response(),
+            }
+        }
+        Ok(None) => (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({ "error": format!("node '{}' not found", name) })),
+        )
+            .into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(serde_json::json!({ "error": e.to_string() })),
