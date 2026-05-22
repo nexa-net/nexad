@@ -1,5 +1,5 @@
 mod handlers;
-mod routes;
+pub mod routes;
 
 use std::sync::Arc;
 
