@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::net::IpAddr;
 use std::sync::RwLock;
 
+#[derive(Default)]
 pub struct DnsRecordStore {
     entries: RwLock<HashMap<String, HashMap<String, Vec<IpAddr>>>>,
 }

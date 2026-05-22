@@ -8,6 +8,7 @@ use nexa_core::domain::models::{Certificate, Route, SubnetAllocation};
 use nexa_core::error::{NexaError, Result};
 use nexa_core::ports::route_store::RouteStore;
 
+#[derive(Default)]
 pub struct InMemoryRouteStore {
     routes: RwLock<HashMap<String, Route>>,
     certificates: RwLock<HashMap<String, Certificate>>,

@@ -1,6 +1,6 @@
 mod api;
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use clap::Parser;
@@ -141,7 +141,7 @@ async fn init_infrastructure(
 
 /// Load or generate the master encryption key and create the encrypted secret
 /// store.
-fn init_secrets(cli: &Cli, data_dir: &PathBuf) -> anyhow::Result<Arc<dyn SecretStore>> {
+fn init_secrets(cli: &Cli, data_dir: &Path) -> anyhow::Result<Arc<dyn SecretStore>> {
     let master_key = nexad::crypto::master_key::load_or_generate(data_dir)?;
     info!("master key loaded");
 

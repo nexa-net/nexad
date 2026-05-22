@@ -47,6 +47,7 @@ pub struct SubnetAllocator {
     next_octet: Mutex<u8>,
 }
 
+#[allow(clippy::new_without_default)]
 impl SubnetAllocator {
     pub fn new() -> Self {
         Self {

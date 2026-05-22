@@ -40,7 +40,7 @@ fn generate_key(path: &Path) -> Result<[u8; KEY_LEN]> {
     let mut key = [0u8; KEY_LEN];
     rand::thread_rng().fill_bytes(&mut key);
 
-    fs::write(path, &key).map_err(|e| NexaError::Secret(format!("write key failed: {e}")))?;
+    fs::write(path, key).map_err(|e| NexaError::Secret(format!("write key failed: {e}")))?;
 
     #[cfg(unix)]
     {

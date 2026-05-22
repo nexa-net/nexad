@@ -106,8 +106,8 @@ impl ProxyBackend for CaddyBackend {
                     || trimmed.starts_with(&format!("http://{domain} "))
                     || trimmed.starts_with(&format!("https://{domain} "))
                     || trimmed == domain
-                    || trimmed == &format!("http://{domain}")
-                    || trimmed == &format!("https://{domain}");
+                    || trimmed == format!("http://{domain}")
+                    || trimmed == format!("https://{domain}");
 
                 if is_domain_line && trimmed.ends_with('{') {
                     skip = true;

@@ -5,6 +5,7 @@ use async_trait::async_trait;
 use nexa_core::error::Result;
 use nexa_core::ports::dns::DnsProvider;
 
+#[derive(Default)]
 pub struct NoopDnsProvider;
 
 impl NoopDnsProvider {

@@ -24,7 +24,7 @@ impl NginxBackend {
     }
 
     fn render_config(route: &RouteConfig) -> String {
-        let domain_underscored = route.domain.replace('.', "_").replace('-', "_");
+        let domain_underscored = route.domain.replace(['.', '-'], "_");
         let mut cfg = String::new();
 
         // Upstream block
@@ -49,7 +49,7 @@ impl NginxBackend {
 
         match &route.tls {
             TlsConfig::None => {
-                cfg.push_str(&format!("server {{\n"));
+                cfg.push_str("server {\n");
                 cfg.push_str("    listen 80;\n");
                 cfg.push_str(&format!("    server_name {};\n\n", route.domain));
                 cfg.push_str("    location / {\n");

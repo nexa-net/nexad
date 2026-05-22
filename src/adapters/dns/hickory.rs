@@ -217,11 +217,11 @@ fn build_dns_response(
 
     let matching_ips: Vec<&IpAddr> = ips
         .iter()
-        .filter(|ip| match (qtype, ip) {
-            (1, IpAddr::V4(_)) => true,
-            (28, IpAddr::V6(_)) => true,
-            (255, _) => true,
-            _ => false,
+        .filter(|ip| {
+            matches!(
+                (qtype, ip),
+                (1, IpAddr::V4(_)) | (28, IpAddr::V6(_)) | (255, _)
+            )
         })
         .collect();
 

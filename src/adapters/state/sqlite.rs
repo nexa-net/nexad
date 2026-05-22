@@ -317,7 +317,7 @@ impl StateStore for SqliteStore {
             .map_err(|e| NexaError::Runtime(e.to_string()))?,
         };
 
-        rows.iter().map(|r| Self::row_to_deployment(r)).collect()
+        rows.iter().map(Self::row_to_deployment).collect()
     }
 
     async fn update_deployment(&self, deployment: &Deployment) -> Result<()> {
@@ -398,7 +398,7 @@ impl StateStore for SqliteStore {
             .map_err(|e| NexaError::Runtime(e.to_string()))?,
         };
 
-        rows.iter().map(|r| Self::row_to_pod(r)).collect()
+        rows.iter().map(Self::row_to_pod).collect()
     }
 
     async fn update_pod(&self, pod: &Pod) -> Result<()> {
@@ -443,7 +443,7 @@ impl StateStore for SqliteStore {
         .await
         .map_err(|e| NexaError::Runtime(e.to_string()))?;
 
-        rows.iter().map(|r| Self::row_to_pod(r)).collect()
+        rows.iter().map(Self::row_to_pod).collect()
     }
 
     async fn insert_node(&self, node: &Node) -> Result<()> {
@@ -520,7 +520,7 @@ impl StateStore for SqliteStore {
         .await
         .map_err(|e| NexaError::Runtime(e.to_string()))?;
 
-        rows.iter().map(|r| Self::row_to_node(r)).collect()
+        rows.iter().map(Self::row_to_node).collect()
     }
 
     async fn update_node(&self, node: &Node) -> Result<()> {

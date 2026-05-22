@@ -33,6 +33,12 @@ jobs:
             binary_suffix: darwin-arm64
     steps:
       - uses: actions/checkout@v4
+      - name: Install protoc
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+      - name: Install protoc (macOS)
+        if: runner.os == 'macOS'
+        run: brew install protobuf
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}

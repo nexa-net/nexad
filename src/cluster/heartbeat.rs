@@ -86,17 +86,15 @@ pub async fn check_nodes(
             if !node_pods.is_empty() {
                 reschedule(node.id, node_pods);
             }
-        } else if elapsed >= NOT_READY_THRESHOLD {
-            if node.status != NodeStatus::NotReady {
-                warn!(
-                    node_id = %node.id,
-                    name = %node.name,
-                    elapsed_secs = elapsed.as_secs(),
-                    "node stale — marking NotReady"
-                );
-                node.status = NodeStatus::NotReady;
-                let _ = state.update_node(&node).await;
-            }
+        } else if elapsed >= NOT_READY_THRESHOLD && node.status != NodeStatus::NotReady {
+            warn!(
+                node_id = %node.id,
+                name = %node.name,
+                elapsed_secs = elapsed.as_secs(),
+                "node stale — marking NotReady"
+            );
+            node.status = NodeStatus::NotReady;
+            let _ = state.update_node(&node).await;
         }
     }
 
