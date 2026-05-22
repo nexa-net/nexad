@@ -136,6 +136,8 @@ fn spawn_orchestrator(
         Some(transport),
         dns,
         master_ip,
+        None,  // proxy
+        None,  // route_store
     );
 
     // Spawn health checker background task
