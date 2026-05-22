@@ -10,6 +10,7 @@ use tracing_subscriber::EnvFilter;
 use nexa_core::domain::models::*;
 use nexa_core::domain::orchestrator::Orchestrator;
 use nexa_core::ports::cluster::ClusterTransport;
+use nexa_core::ports::dns::DnsProvider;
 use nexa_core::ports::runtime::ContainerRuntime;
 use nexa_core::ports::secrets::SecretStore;
 use nexa_core::ports::state::StateStore;
@@ -41,6 +42,22 @@ struct Cli {
     /// gRPC listen port (master and worker modes)
     #[arg(long, default_value = "6444")]
     grpc_port: u16,
+
+    /// DNS mode: "noop" for single-node (Docker DNS), "embedded" for multi-node
+    #[arg(long, default_value = "noop")]
+    dns_mode: String,
+
+    /// IP address of this node (used for container DNS config in embedded mode)
+    #[arg(long)]
+    master_ip: Option<String>,
+
+    /// DNS listen address for embedded DNS server
+    #[arg(long, default_value = "0.0.0.0:15353")]
+    dns_listen: String,
+
+    /// Upstream DNS server for forwarding non-.internal queries
+    #[arg(long, default_value = "8.8.8.8:53")]
+    dns_upstream: String,
 }
 
 #[tokio::main]
@@ -107,6 +124,8 @@ fn spawn_orchestrator(
     runtime: &Arc<dyn ContainerRuntime>,
     store: &Arc<dyn StateStore>,
     secret_store: Arc<dyn SecretStore>,
+    dns: Option<Arc<dyn DnsProvider>>,
+    master_ip: Option<String>,
 ) -> nexa_core::domain::orchestrator::OrchestratorHandle {
     let transport: Arc<dyn ClusterTransport> =
         Arc::new(nexad::adapters::transport::LocalTransport::new(Arc::clone(runtime)));
@@ -115,8 +134,8 @@ fn spawn_orchestrator(
         Some(Arc::clone(store)),
         Some(secret_store),
         Some(transport),
-        None,
-        None,
+        dns,
+        master_ip,
     );
 
     // Spawn health checker background task
@@ -134,6 +153,29 @@ fn spawn_orchestrator(
     handle
 }
 
+/// Initialise the DNS provider based on --dns-mode CLI flag.
+async fn init_dns(cli: &Cli) -> anyhow::Result<(Option<Arc<dyn DnsProvider>>, Option<String>)> {
+    match cli.dns_mode.as_str() {
+        "embedded" => {
+            let listen_addr: std::net::SocketAddr = cli.dns_listen.parse()
+                .map_err(|e| anyhow::anyhow!("invalid --dns-listen address: {e}"))?;
+            let upstream_addr: std::net::SocketAddr = cli.dns_upstream.parse()
+                .map_err(|e| anyhow::anyhow!("invalid --dns-upstream address: {e}"))?;
+
+            let provider = nexad::adapters::dns::HickoryDnsProvider::new(listen_addr, upstream_addr);
+            provider.start().await?;
+            info!(listen = %cli.dns_listen, upstream = %cli.dns_upstream, "embedded DNS server started");
+
+            let master_ip = cli.master_ip.clone();
+            Ok((Some(Arc::new(provider) as Arc<dyn DnsProvider>), master_ip))
+        }
+        _ => {
+            info!("using noop DNS (single-node, containers use Docker DNS)");
+            Ok((None, None))
+        }
+    }
+}
+
 // ────────────────────── single-node mode ──────────────────────
 
 async fn start_single_node(cli: &Cli) -> anyhow::Result<()> {
@@ -141,7 +183,8 @@ async fn start_single_node(cli: &Cli) -> anyhow::Result<()> {
 
     let (data_dir, store, runtime) = init_infrastructure(cli).await?;
     let secret_store = init_secrets(cli, &data_dir)?;
-    let handle = spawn_orchestrator(&runtime, &store, secret_store);
+    let (dns, master_ip) = init_dns(cli).await?;
+    let handle = spawn_orchestrator(&runtime, &store, secret_store, dns, master_ip);
 
     let addr = format!("{}:{}", cli.host, cli.port);
     api::serve(handle, Arc::clone(&store), &addr).await
@@ -157,7 +200,8 @@ async fn start_master(cli: &Cli) -> anyhow::Result<()> {
 
     let (data_dir, store, runtime) = init_infrastructure(cli).await?;
     let secret_store = init_secrets(cli, &data_dir)?;
-    let handle = spawn_orchestrator(&runtime, &store, secret_store);
+    let (dns, master_ip) = init_dns(cli).await?;
+    let handle = spawn_orchestrator(&runtime, &store, secret_store, dns, master_ip);
 
     // Register self as a master node.
     let hostname = hostname::get()
