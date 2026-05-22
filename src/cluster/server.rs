@@ -214,6 +214,7 @@ impl ClusterService for ClusterServer {
         let config = ContainerConfig {
             name: container_name.clone(),
             image: spec.image.clone(),
+            command: vec![],
             env: spec.env.clone(),
             ports,
             volumes,

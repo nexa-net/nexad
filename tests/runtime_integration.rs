@@ -83,6 +83,7 @@ async fn test_create_start_stop_remove() {
     let config = ContainerConfig {
         name: name.clone(),
         image: TEST_IMAGE.to_string(),
+        command: vec!["sleep".into(), "60".into()],
         env: HashMap::new(),
         ports: vec![],
         volumes: vec![],
@@ -147,6 +148,7 @@ async fn test_container_exists() {
     let config = ContainerConfig {
         name: name.clone(),
         image: TEST_IMAGE.to_string(),
+        command: vec![],
         env: HashMap::new(),
         ports: vec![],
         volumes: vec![],
@@ -190,6 +192,7 @@ async fn test_inspect_container() {
     let config = ContainerConfig {
         name: name.clone(),
         image: TEST_IMAGE.to_string(),
+        command: vec![],
         env: HashMap::new(),
         ports: vec![],
         volumes: vec![],

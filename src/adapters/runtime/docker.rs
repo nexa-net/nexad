@@ -107,8 +107,14 @@ impl ContainerRuntime for DockerRuntime {
             },
             ..Default::default()
         };
+        let cmd = if config.command.is_empty() {
+            None
+        } else {
+            Some(config.command.clone())
+        };
         let container_config = Config {
             image: Some(config.image.clone()),
+            cmd,
             env: Some(env),
             exposed_ports: Some(exposed_ports),
             labels: Some(config.labels.clone()),
