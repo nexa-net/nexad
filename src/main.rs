@@ -9,6 +9,7 @@ use tracing_subscriber::EnvFilter;
 
 use nexa_core::domain::models::*;
 use nexa_core::domain::orchestrator::Orchestrator;
+use nexa_core::ports::cluster::ClusterTransport;
 use nexa_core::ports::runtime::ContainerRuntime;
 use nexa_core::ports::secrets::SecretStore;
 use nexa_core::ports::state::StateStore;
@@ -107,10 +108,13 @@ fn spawn_orchestrator(
     store: &Arc<dyn StateStore>,
     secret_store: Arc<dyn SecretStore>,
 ) -> nexa_core::domain::orchestrator::OrchestratorHandle {
+    let transport: Arc<dyn ClusterTransport> =
+        Arc::new(nexad::adapters::transport::LocalTransport::new(Arc::clone(runtime)));
     let handle = Orchestrator::spawn(
         Arc::clone(runtime),
         Some(Arc::clone(store)),
         Some(secret_store),
+        Some(transport),
     );
 
     // Spawn health checker background task
