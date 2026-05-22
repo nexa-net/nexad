@@ -69,6 +69,15 @@ pub fn build(state: AppState) -> Router {
         .route("/api/v1/nodes/{name}", delete(handlers::remove_node))
         .route("/api/v1/cluster/scheduler", get(handlers::get_scheduler_config))
         .route("/api/v1/cluster/scheduler", post(handlers::set_scheduler_config))
+        // Routes
+        .route("/api/v1/routes", get(handlers::list_routes))
+        .route("/api/v1/routes", post(handlers::add_route))
+        .route("/api/v1/routes/{domain}", delete(handlers::remove_route))
+        // Certificates
+        .route("/api/v1/certs/import", post(handlers::import_cert))
+        // Proxy config
+        .route("/api/v1/cluster/config/proxy", get(handlers::get_proxy_config))
+        .route("/api/v1/cluster/config/proxy", post(handlers::set_proxy_config))
         .layer(TraceLayer::new_for_http())
         .with_state(state)
 }

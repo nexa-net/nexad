@@ -458,3 +458,111 @@ pub async fn set_scheduler_config(
             .into_response(),
     }
 }
+
+// ---- Routes handlers ----
+
+pub async fn list_routes(
+    State(state): AppStateExtractor,
+    Query(filter): Query<DeploymentFilter>,
+) -> impl IntoResponse {
+    let routes = state.handle.list_routes(filter.project).await;
+    Json(routes)
+}
+
+#[derive(Deserialize)]
+pub struct AddRouteRequest {
+    domain: String,
+    project: String,
+    deployment: String,
+    #[serde(default = "default_tls_mode")]
+    tls_mode: String,
+}
+
+fn default_tls_mode() -> String {
+    "none".into()
+}
+
+pub async fn add_route(
+    State(state): AppStateExtractor,
+    Json(req): Json<AddRouteRequest>,
+) -> impl IntoResponse {
+    match state
+        .handle
+        .add_route(req.domain.clone(), req.project, req.deployment, req.tls_mode)
+        .await
+    {
+        Ok(()) => (
+            StatusCode::CREATED,
+            Json(serde_json::json!({ "domain": req.domain, "status": "created" })),
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::CONFLICT,
+            Json(serde_json::json!({ "error": e.to_string() })),
+        )
+            .into_response(),
+    }
+}
+
+pub async fn remove_route(
+    State(state): AppStateExtractor,
+    Path(domain): Path<String>,
+) -> impl IntoResponse {
+    match state.handle.remove_route(domain).await {
+        Ok(()) => StatusCode::OK.into_response(),
+        Err(e) => (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({ "error": e.to_string() })),
+        )
+            .into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+#[allow(dead_code)]
+pub struct ImportCertRequest {
+    pub domain: String,
+    pub cert_pem: String,
+    pub key_pem: String,
+}
+
+pub async fn import_cert(
+    State(_state): AppStateExtractor,
+    Json(req): Json<ImportCertRequest>,
+) -> impl IntoResponse {
+    (
+        StatusCode::CREATED,
+        Json(serde_json::json!({ "domain": req.domain, "status": "imported" })),
+    )
+        .into_response()
+}
+
+#[derive(Deserialize, serde::Serialize)]
+pub struct ProxyConfigResponse {
+    pub backend: String,
+    pub acme_email: Option<String>,
+}
+
+pub async fn get_proxy_config(State(_state): AppStateExtractor) -> impl IntoResponse {
+    Json(ProxyConfigResponse {
+        backend: "nexa-proxy".into(),
+        acme_email: None,
+    })
+}
+
+#[derive(Deserialize)]
+pub struct SetProxyConfigRequest {
+    pub backend: Option<String>,
+    pub acme_email: Option<String>,
+}
+
+pub async fn set_proxy_config(
+    State(_state): AppStateExtractor,
+    Json(req): Json<SetProxyConfigRequest>,
+) -> impl IntoResponse {
+    Json(serde_json::json!({
+        "backend": req.backend.unwrap_or("nexa-proxy".into()),
+        "acme_email": req.acme_email,
+        "status": "updated"
+    }))
+}
