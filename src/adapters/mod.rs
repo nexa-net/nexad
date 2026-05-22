@@ -1,6 +1,7 @@
 pub mod dns;
 pub mod event_watcher;
 pub mod health;
+pub mod proxy;
 pub mod runtime;
 pub mod secrets;
 pub mod state;
