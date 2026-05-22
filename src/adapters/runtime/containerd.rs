@@ -420,6 +420,7 @@ impl ContainerRuntime for ContainerdRuntime {
             .arg("events")
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::null())
+            .kill_on_drop(true)
             .spawn()
             .map_err(|e| NexaError::Runtime(format!("failed to start ctr events: {e}")))?;
 
@@ -431,36 +432,39 @@ impl ContainerRuntime for ContainerdRuntime {
         let reader = tokio::io::BufReader::new(stdout);
         let lines = tokio_stream::wrappers::LinesStream::new(reader.lines());
 
-        let stream = lines.filter_map(move |line_result| async move {
-            let line = match line_result {
-                Ok(l) => l,
-                Err(e) => {
-                    warn!(error = %e, "error reading ctr events");
-                    return None;
-                }
-            };
+        let stream = lines.filter_map(move |line_result| {
+            let _child_guard = &child;
+            async move {
+                let line = match line_result {
+                    Ok(l) => l,
+                    Err(e) => {
+                        warn!(error = %e, "error reading ctr events");
+                        return None;
+                    }
+                };
 
-            // ctr events outputs lines like:
-            //   <timestamp> <topic> <payload>
-            // Topic patterns:
-            //   /tasks/exit    → ContainerDied
-            //   /tasks/start   → ContainerStarted
-            //   /tasks/oom     → ContainerOom
-            if line.contains("/tasks/exit") {
-                let container_id = extract_container_id(&line).unwrap_or_default();
-                let exit_code = extract_exit_code(&line).unwrap_or(-1);
-                Some(RuntimeEvent::ContainerDied {
-                    container_id,
-                    exit_code,
-                })
-            } else if line.contains("/tasks/start") {
-                let container_id = extract_container_id(&line).unwrap_or_default();
-                Some(RuntimeEvent::ContainerStarted { container_id })
-            } else if line.contains("/tasks/oom") {
-                let container_id = extract_container_id(&line).unwrap_or_default();
-                Some(RuntimeEvent::ContainerOom { container_id })
-            } else {
-                None
+                // ctr events outputs lines like:
+                //   <timestamp> <topic> <payload>
+                // Topic patterns:
+                //   /tasks/exit    → ContainerDied
+                //   /tasks/start   → ContainerStarted
+                //   /tasks/oom     → ContainerOom
+                if line.contains("/tasks/exit") {
+                    let container_id = extract_container_id(&line).unwrap_or_default();
+                    let exit_code = extract_exit_code(&line).unwrap_or(-1);
+                    Some(RuntimeEvent::ContainerDied {
+                        container_id,
+                        exit_code,
+                    })
+                } else if line.contains("/tasks/start") {
+                    let container_id = extract_container_id(&line).unwrap_or_default();
+                    Some(RuntimeEvent::ContainerStarted { container_id })
+                } else if line.contains("/tasks/oom") {
+                    let container_id = extract_container_id(&line).unwrap_or_default();
+                    Some(RuntimeEvent::ContainerOom { container_id })
+                } else {
+                    None
+                }
             }
         });
 

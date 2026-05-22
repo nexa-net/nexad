@@ -57,16 +57,21 @@ impl SubnetAllocator {
 
     /// Allocate a /24 subnet for the given network name.
     /// Returns the same subnet if the name was already allocated.
-    pub fn allocate(&self, name: &str) -> String {
+    pub fn allocate(&self, name: &str) -> nexa_core::error::Result<String> {
         let mut allocs = self.allocations.lock().unwrap();
         if let Some(&octet) = allocs.get(name) {
-            return format!("172.20.{octet}.0/24");
+            return Ok(format!("172.20.{octet}.0/24"));
         }
         let mut next = self.next_octet.lock().unwrap();
+        if *next == 0 {
+            return Err(nexa_core::error::NexaError::Runtime(
+                "subnet pool exhausted (255 /24 networks allocated)".into(),
+            ));
+        }
         let octet = *next;
         *next = next.wrapping_add(1);
         allocs.insert(name.to_string(), octet);
-        format!("172.20.{octet}.0/24")
+        Ok(format!("172.20.{octet}.0/24"))
     }
 
     /// Release a subnet allocation for the given network name.
@@ -108,7 +113,7 @@ impl CniManager {
             return Ok(());
         }
 
-        let subnet = self.subnet_allocator.allocate(name);
+        let subnet = self.subnet_allocator.allocate(name)?;
         let config = CniConfig {
             cni_version: "1.0.0".to_string(),
             name: name.to_string(),
@@ -168,8 +173,8 @@ mod tests {
     #[test]
     fn subnet_allocator_assigns_sequential_subnets() {
         let alloc = SubnetAllocator::new();
-        let s1 = alloc.allocate("net-a");
-        let s2 = alloc.allocate("net-b");
+        let s1 = alloc.allocate("net-a").unwrap();
+        let s2 = alloc.allocate("net-b").unwrap();
         assert_eq!(s1, "172.20.1.0/24");
         assert_eq!(s2, "172.20.2.0/24");
     }
@@ -177,20 +182,20 @@ mod tests {
     #[test]
     fn subnet_allocator_returns_same_for_existing() {
         let alloc = SubnetAllocator::new();
-        let s1 = alloc.allocate("net-a");
-        let s2 = alloc.allocate("net-a");
+        let s1 = alloc.allocate("net-a").unwrap();
+        let s2 = alloc.allocate("net-a").unwrap();
         assert_eq!(s1, s2);
     }
 
     #[test]
     fn subnet_allocator_release_frees_name() {
         let alloc = SubnetAllocator::new();
-        let s1 = alloc.allocate("net-a");
+        let s1 = alloc.allocate("net-a").unwrap();
         assert_eq!(s1, "172.20.1.0/24");
         alloc.release("net-a");
         // After release, a new allocation for the same name gets the next octet,
         // not the freed one (sequential allocator).
-        let s2 = alloc.allocate("net-a");
+        let s2 = alloc.allocate("net-a").unwrap();
         assert_eq!(s2, "172.20.2.0/24");
     }
 

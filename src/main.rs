@@ -420,17 +420,18 @@ async fn start_worker(cli: &Cli) -> anyhow::Result<()> {
 
     std::fs::create_dir_all(&cli.data_dir)?;
 
-    // Worker gets its own local state store and runtime.
+    // Worker gets its own local state store and runtime (respects --runtime flag).
     let db_path = format!("{}/nexa.db", cli.data_dir);
     let database_url = format!("sqlite:{}?mode=rwc", db_path);
     let store = nexad::adapters::state::SqliteStore::connect(&database_url).await?;
     let store: Arc<dyn StateStore> = Arc::new(store);
     info!(path = db_path, "worker state store initialized");
 
-    let runtime = nexad::adapters::runtime::DockerRuntime::new()?;
-    runtime.ping().await?;
-    info!("connected to Docker runtime");
-    let runtime: Arc<dyn ContainerRuntime> = Arc::new(runtime);
+    use nexad::adapters::runtime::{RuntimeDetector, RuntimeKind};
+    let kind: RuntimeKind = cli.runtime.parse().map_err(|e: String| anyhow::anyhow!(e))?;
+    let resolved = RuntimeDetector::resolve(kind).unwrap_or(RuntimeKind::Docker);
+    let runtime = RuntimeDetector::build(resolved, &cli.data_dir).await?;
+    info!(runtime = runtime.runtime_name(), "worker container runtime initialized");
 
     let listen_addr = format!("{}:{}", cli.host, cli.grpc_port);
 
