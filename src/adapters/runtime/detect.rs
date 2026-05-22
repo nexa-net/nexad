@@ -24,7 +24,9 @@ impl FromStr for RuntimeKind {
             "docker" => Ok(RuntimeKind::Docker),
             "containerd" => Ok(RuntimeKind::Containerd),
             "auto" => Ok(RuntimeKind::Auto),
-            other => Err(format!("unknown runtime: {other}. Use: docker, containerd, or auto")),
+            other => Err(format!(
+                "unknown runtime: {other}. Use: docker, containerd, or auto"
+            )),
         }
     }
 }
@@ -60,7 +62,9 @@ impl RuntimeDetector {
         } else if containerd {
             Ok(RuntimeKind::Containerd)
         } else {
-            anyhow::bail!("no container runtime found: neither Docker nor containerd socket detected")
+            anyhow::bail!(
+                "no container runtime found: neither Docker nor containerd socket detected"
+            )
         }
     }
 
@@ -103,12 +107,18 @@ mod tests {
 
     #[test]
     fn parse_runtime_kind_docker() {
-        assert_eq!("docker".parse::<RuntimeKind>().unwrap(), RuntimeKind::Docker);
+        assert_eq!(
+            "docker".parse::<RuntimeKind>().unwrap(),
+            RuntimeKind::Docker
+        );
     }
 
     #[test]
     fn parse_runtime_kind_containerd() {
-        assert_eq!("containerd".parse::<RuntimeKind>().unwrap(), RuntimeKind::Containerd);
+        assert_eq!(
+            "containerd".parse::<RuntimeKind>().unwrap(),
+            RuntimeKind::Containerd
+        );
     }
 
     #[test]
@@ -118,8 +128,14 @@ mod tests {
 
     #[test]
     fn parse_runtime_kind_case_insensitive() {
-        assert_eq!("Docker".parse::<RuntimeKind>().unwrap(), RuntimeKind::Docker);
-        assert_eq!("CONTAINERD".parse::<RuntimeKind>().unwrap(), RuntimeKind::Containerd);
+        assert_eq!(
+            "Docker".parse::<RuntimeKind>().unwrap(),
+            RuntimeKind::Docker
+        );
+        assert_eq!(
+            "CONTAINERD".parse::<RuntimeKind>().unwrap(),
+            RuntimeKind::Containerd
+        );
         assert_eq!("AUTO".parse::<RuntimeKind>().unwrap(), RuntimeKind::Auto);
     }
 

@@ -8,10 +8,7 @@ use uuid::Uuid;
 use nexa_core::domain::orchestrator::Command;
 use nexa_core::ports::runtime::{ContainerRuntime, RuntimeEvent};
 
-pub fn spawn_event_watcher(
-    runtime: Arc<dyn ContainerRuntime>,
-    tx: mpsc::Sender<Command>,
-) {
+pub fn spawn_event_watcher(runtime: Arc<dyn ContainerRuntime>, tx: mpsc::Sender<Command>) {
     tokio::spawn(async move {
         info!("container event watcher starting");
         loop {
@@ -36,7 +33,10 @@ async fn handle_event_stream(
 ) {
     while let Some(event) = stream.next().await {
         match event {
-            RuntimeEvent::ContainerDied { container_id, exit_code } => {
+            RuntimeEvent::ContainerDied {
+                container_id,
+                exit_code,
+            } => {
                 info!(container_id, exit_code, "container died event");
                 if let Some(pod_id) = extract_pod_id(&container_id) {
                     let cmd = Command::ContainerExited { pod_id, exit_code };
@@ -49,7 +49,10 @@ async fn handle_event_stream(
             RuntimeEvent::ContainerOom { container_id } => {
                 warn!(container_id, "container OOM event");
                 if let Some(pod_id) = extract_pod_id(&container_id) {
-                    let cmd = Command::ContainerExited { pod_id, exit_code: 137 };
+                    let cmd = Command::ContainerExited {
+                        pod_id,
+                        exit_code: 137,
+                    };
                     if tx.send(cmd).await.is_err() {
                         error!("orchestrator channel closed, stopping event watcher");
                         return;
@@ -95,7 +98,10 @@ mod tests {
         handle_event_stream(stream, &tx).await;
         let cmd = rx.try_recv().expect("should have received a command");
         match cmd {
-            Command::ContainerExited { pod_id: pid, exit_code } => {
+            Command::ContainerExited {
+                pod_id: pid,
+                exit_code,
+            } => {
                 assert_eq!(pid, pod_id);
                 assert_eq!(exit_code, 1);
             }
@@ -115,7 +121,10 @@ mod tests {
         handle_event_stream(stream, &tx).await;
         let cmd = rx.try_recv().expect("should have received a command");
         match cmd {
-            Command::ContainerExited { pod_id: pid, exit_code } => {
+            Command::ContainerExited {
+                pod_id: pid,
+                exit_code,
+            } => {
                 assert_eq!(pid, pod_id);
                 assert_eq!(exit_code, 137);
             }

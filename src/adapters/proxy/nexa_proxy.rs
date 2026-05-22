@@ -256,10 +256,7 @@ mod tests {
         }];
         let backend = NexaProxyBackend::new("/tmp/test.json", "nexa-proxy", "0.0.0.0:80", None);
         let config = backend.build_config(&routes);
-        let tls = config.routes["manual.example.com"]
-            .tls
-            .as_ref()
-            .unwrap();
+        let tls = config.routes["manual.example.com"].tls.as_ref().unwrap();
         assert_eq!(
             tls.cert_path.as_ref().unwrap(),
             &PathBuf::from("/certs/cert.pem")
@@ -298,8 +295,7 @@ mod tests {
 
     #[tokio::test]
     async fn health_returns_false_when_no_child() {
-        let backend =
-            NexaProxyBackend::new("/tmp/nope.json", "nexa-proxy", "0.0.0.0:80", None);
+        let backend = NexaProxyBackend::new("/tmp/nope.json", "nexa-proxy", "0.0.0.0:80", None);
         assert!(!backend.health().await.unwrap());
     }
 }

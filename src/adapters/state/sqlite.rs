@@ -21,9 +21,7 @@ impl SqliteStore {
         sqlx::query("PRAGMA journal_mode=WAL")
             .execute(&pool)
             .await?;
-        sqlx::query("PRAGMA foreign_keys=ON")
-            .execute(&pool)
-            .await?;
+        sqlx::query("PRAGMA foreign_keys=ON").execute(&pool).await?;
 
         // Run migrations
         sqlx::migrate!("./migrations").run(&pool).await?;
@@ -38,8 +36,8 @@ impl SqliteStore {
             .map_err(|e| NexaError::Runtime(format!("invalid deployment id: {e}")))?;
 
         let spec_json: String = row.get("spec_json");
-        let spec: DeploymentSpec = serde_json::from_str(&spec_json)
-            .map_err(NexaError::Serialization)?;
+        let spec: DeploymentSpec =
+            serde_json::from_str(&spec_json).map_err(NexaError::Serialization)?;
 
         let status_str: String = row.get("status");
         let status = status_str
@@ -47,14 +45,14 @@ impl SqliteStore {
             .map_err(|e| NexaError::Runtime(format!("invalid deployment status: {e}")))?;
 
         let created_at_str: String = row.get("created_at");
-        let created_at = created_at_str
-            .parse()
-            .map_err(|e: chrono::ParseError| NexaError::Runtime(format!("invalid created_at: {e}")))?;
+        let created_at = created_at_str.parse().map_err(|e: chrono::ParseError| {
+            NexaError::Runtime(format!("invalid created_at: {e}"))
+        })?;
 
         let updated_at_str: String = row.get("updated_at");
-        let updated_at = updated_at_str
-            .parse()
-            .map_err(|e: chrono::ParseError| NexaError::Runtime(format!("invalid updated_at: {e}")))?;
+        let updated_at = updated_at_str.parse().map_err(|e: chrono::ParseError| {
+            NexaError::Runtime(format!("invalid updated_at: {e}"))
+        })?;
 
         Ok(Deployment {
             id,
@@ -90,12 +88,14 @@ impl SqliteStore {
         let last_heartbeat_str: String = row.get("last_heartbeat");
         let last_heartbeat = last_heartbeat_str
             .parse()
-            .map_err(|e: chrono::ParseError| NexaError::Runtime(format!("invalid last_heartbeat: {e}")))?;
+            .map_err(|e: chrono::ParseError| {
+                NexaError::Runtime(format!("invalid last_heartbeat: {e}"))
+            })?;
 
         let joined_at_str: String = row.get("joined_at");
-        let joined_at = joined_at_str
-            .parse()
-            .map_err(|e: chrono::ParseError| NexaError::Runtime(format!("invalid joined_at: {e}")))?;
+        let joined_at = joined_at_str.parse().map_err(|e: chrono::ParseError| {
+            NexaError::Runtime(format!("invalid joined_at: {e}"))
+        })?;
 
         Ok(Node {
             id,
@@ -132,9 +132,9 @@ impl SqliteStore {
             .map_err(|e| NexaError::Runtime(format!("invalid pod status: {e}")))?;
 
         let created_at_str: String = row.get("created_at");
-        let created_at = created_at_str
-            .parse()
-            .map_err(|e: chrono::ParseError| NexaError::Runtime(format!("invalid created_at: {e}")))?;
+        let created_at = created_at_str.parse().map_err(|e: chrono::ParseError| {
+            NexaError::Runtime(format!("invalid created_at: {e}"))
+        })?;
 
         let replica_index: i64 = row.get("replica_index");
         let restart_count: i64 = row.get("restart_count");
@@ -165,23 +165,19 @@ impl SqliteStore {
 #[async_trait]
 impl StateStore for SqliteStore {
     async fn insert_project(&self, project: &Project) -> Result<()> {
-        let result = sqlx::query(
-            "INSERT INTO projects (name, status, created_at) VALUES (?, ?, ?)",
-        )
-        .bind(&project.name)
-        .bind(project.status.to_string())
-        .bind(project.created_at.to_rfc3339())
-        .execute(&self.pool)
-        .await;
+        let result =
+            sqlx::query("INSERT INTO projects (name, status, created_at) VALUES (?, ?, ?)")
+                .bind(&project.name)
+                .bind(project.status.to_string())
+                .bind(project.created_at.to_rfc3339())
+                .execute(&self.pool)
+                .await;
 
         match result {
             Ok(_) => Ok(()),
-            Err(sqlx::Error::Database(e)) if e.is_unique_violation() => {
-                Err(NexaError::InvalidSpec(format!(
-                    "project '{}' already exists",
-                    project.name
-                )))
-            }
+            Err(sqlx::Error::Database(e)) if e.is_unique_violation() => Err(
+                NexaError::InvalidSpec(format!("project '{}' already exists", project.name)),
+            ),
             Err(e) => Err(NexaError::Runtime(e.to_string())),
         }
     }
@@ -201,9 +197,9 @@ impl StateStore for SqliteStore {
                     .parse::<ProjectStatus>()
                     .map_err(|e| NexaError::Runtime(format!("invalid project status: {e}")))?;
                 let created_at_str: String = r.get("created_at");
-                let created_at = created_at_str
-                    .parse()
-                    .map_err(|e: chrono::ParseError| NexaError::Runtime(format!("invalid created_at: {e}")))?;
+                let created_at = created_at_str.parse().map_err(|e: chrono::ParseError| {
+                    NexaError::Runtime(format!("invalid created_at: {e}"))
+                })?;
                 Ok(Some(Project {
                     name: r.get("name"),
                     status,
@@ -226,9 +222,9 @@ impl StateStore for SqliteStore {
                     .parse::<ProjectStatus>()
                     .map_err(|e| NexaError::Runtime(format!("invalid project status: {e}")))?;
                 let created_at_str: String = r.get("created_at");
-                let created_at = created_at_str
-                    .parse()
-                    .map_err(|e: chrono::ParseError| NexaError::Runtime(format!("invalid created_at: {e}")))?;
+                let created_at = created_at_str.parse().map_err(|e: chrono::ParseError| {
+                    NexaError::Runtime(format!("invalid created_at: {e}"))
+                })?;
                 Ok(Project {
                     name: r.get("name"),
                     status,
@@ -304,25 +300,21 @@ impl StateStore for SqliteStore {
 
     async fn list_deployments(&self, project: Option<&str>) -> Result<Vec<Deployment>> {
         let rows = match project {
-            Some(p) => {
-                sqlx::query(
-                    "SELECT id, spec_json, status, created_at, updated_at \
+            Some(p) => sqlx::query(
+                "SELECT id, spec_json, status, created_at, updated_at \
                      FROM deployments WHERE project = ? ORDER BY created_at",
-                )
-                .bind(p)
-                .fetch_all(&self.pool)
-                .await
-                .map_err(|e| NexaError::Runtime(e.to_string()))?
-            }
-            None => {
-                sqlx::query(
-                    "SELECT id, spec_json, status, created_at, updated_at \
+            )
+            .bind(p)
+            .fetch_all(&self.pool)
+            .await
+            .map_err(|e| NexaError::Runtime(e.to_string()))?,
+            None => sqlx::query(
+                "SELECT id, spec_json, status, created_at, updated_at \
                      FROM deployments ORDER BY created_at",
-                )
-                .fetch_all(&self.pool)
-                .await
-                .map_err(|e| NexaError::Runtime(e.to_string()))?
-            }
+            )
+            .fetch_all(&self.pool)
+            .await
+            .map_err(|e| NexaError::Runtime(e.to_string()))?,
         };
 
         rows.iter().map(|r| Self::row_to_deployment(r)).collect()
@@ -387,27 +379,23 @@ impl StateStore for SqliteStore {
 
     async fn list_pods(&self, project: Option<&str>) -> Result<Vec<Pod>> {
         let rows = match project {
-            Some(p) => {
-                sqlx::query(
-                    "SELECT id, deployment_id, project, deployment_name, replica_index, node_id, \
+            Some(p) => sqlx::query(
+                "SELECT id, deployment_id, project, deployment_name, replica_index, node_id, \
                      container_id, container_ip, status, image, restart_count, created_at \
                      FROM pods WHERE project = ? ORDER BY created_at",
-                )
-                .bind(p)
-                .fetch_all(&self.pool)
-                .await
-                .map_err(|e| NexaError::Runtime(e.to_string()))?
-            }
-            None => {
-                sqlx::query(
-                    "SELECT id, deployment_id, project, deployment_name, replica_index, node_id, \
+            )
+            .bind(p)
+            .fetch_all(&self.pool)
+            .await
+            .map_err(|e| NexaError::Runtime(e.to_string()))?,
+            None => sqlx::query(
+                "SELECT id, deployment_id, project, deployment_name, replica_index, node_id, \
                      container_id, container_ip, status, image, restart_count, created_at \
                      FROM pods ORDER BY created_at",
-                )
-                .fetch_all(&self.pool)
-                .await
-                .map_err(|e| NexaError::Runtime(e.to_string()))?
-            }
+            )
+            .fetch_all(&self.pool)
+            .await
+            .map_err(|e| NexaError::Runtime(e.to_string()))?,
         };
 
         rows.iter().map(|r| Self::row_to_pod(r)).collect()
@@ -481,12 +469,9 @@ impl StateStore for SqliteStore {
 
         match result {
             Ok(_) => Ok(()),
-            Err(sqlx::Error::Database(e)) if e.is_unique_violation() => {
-                Err(NexaError::InvalidSpec(format!(
-                    "node '{}' already exists",
-                    node.name
-                )))
-            }
+            Err(sqlx::Error::Database(e)) if e.is_unique_violation() => Err(
+                NexaError::InvalidSpec(format!("node '{}' already exists", node.name)),
+            ),
             Err(e) => Err(NexaError::Runtime(e.to_string())),
         }
     }
@@ -621,7 +606,9 @@ mod tests {
     fn make_spec(project: &str, name: &str) -> DeploymentSpec {
         DeploymentSpec {
             project: project.to_string(),
-            deployment: DeploymentMeta { name: name.to_string() },
+            deployment: DeploymentMeta {
+                name: name.to_string(),
+            },
             replicas: 1,
             image: "nginx:latest".to_string(),
             ports: vec![80, 443],
@@ -719,11 +706,7 @@ mod tests {
         deployment.status = DeploymentStatus::Running;
         store.update_deployment(&deployment).await.unwrap();
 
-        let fetched = store
-            .get_deployment("myapp", "api")
-            .await
-            .unwrap()
-            .unwrap();
+        let fetched = store.get_deployment("myapp", "api").await.unwrap().unwrap();
         assert_eq!(fetched.status, DeploymentStatus::Running);
     }
 
@@ -869,8 +852,18 @@ mod tests {
     #[tokio::test]
     async fn node_list() {
         let store = setup_store().await;
-        let n1 = Node::new("w1".into(), "10.0.0.1:9000".into(), NodeRole::Worker, sample_resources());
-        let n2 = Node::new("w2".into(), "10.0.0.2:9000".into(), NodeRole::Worker, sample_resources());
+        let n1 = Node::new(
+            "w1".into(),
+            "10.0.0.1:9000".into(),
+            NodeRole::Worker,
+            sample_resources(),
+        );
+        let n2 = Node::new(
+            "w2".into(),
+            "10.0.0.2:9000".into(),
+            NodeRole::Worker,
+            sample_resources(),
+        );
 
         store.insert_node(&n1).await.unwrap();
         store.insert_node(&n2).await.unwrap();
@@ -902,7 +895,12 @@ mod tests {
     #[tokio::test]
     async fn node_update_not_found() {
         let store = setup_store().await;
-        let phantom = Node::new("ghost".into(), "0.0.0.0:0".into(), NodeRole::Worker, sample_resources());
+        let phantom = Node::new(
+            "ghost".into(),
+            "0.0.0.0:0".into(),
+            NodeRole::Worker,
+            sample_resources(),
+        );
         let result = store.update_node(&phantom).await;
         assert!(result.is_err());
     }
@@ -910,7 +908,12 @@ mod tests {
     #[tokio::test]
     async fn node_delete() {
         let store = setup_store().await;
-        let node = Node::new("w1".into(), "10.0.0.1:9000".into(), NodeRole::Worker, sample_resources());
+        let node = Node::new(
+            "w1".into(),
+            "10.0.0.1:9000".into(),
+            NodeRole::Worker,
+            sample_resources(),
+        );
         let node_id = node.id;
 
         store.insert_node(&node).await.unwrap();
@@ -923,8 +926,18 @@ mod tests {
     #[tokio::test]
     async fn node_duplicate_name_fails() {
         let store = setup_store().await;
-        let n1 = Node::new("worker-1".into(), "10.0.0.1:9000".into(), NodeRole::Worker, sample_resources());
-        let n2 = Node::new("worker-1".into(), "10.0.0.2:9000".into(), NodeRole::Worker, sample_resources());
+        let n1 = Node::new(
+            "worker-1".into(),
+            "10.0.0.1:9000".into(),
+            NodeRole::Worker,
+            sample_resources(),
+        );
+        let n2 = Node::new(
+            "worker-1".into(),
+            "10.0.0.2:9000".into(),
+            NodeRole::Worker,
+            sample_resources(),
+        );
 
         store.insert_node(&n1).await.unwrap();
         let result = store.insert_node(&n2).await;
@@ -942,12 +955,18 @@ mod tests {
         assert!(val.is_none());
 
         // Set and get
-        store.set_cluster_config("leader_id", "node-abc").await.unwrap();
+        store
+            .set_cluster_config("leader_id", "node-abc")
+            .await
+            .unwrap();
         let val = store.get_cluster_config("leader_id").await.unwrap();
         assert_eq!(val.as_deref(), Some("node-abc"));
 
         // Overwrite
-        store.set_cluster_config("leader_id", "node-xyz").await.unwrap();
+        store
+            .set_cluster_config("leader_id", "node-xyz")
+            .await
+            .unwrap();
         let val = store.get_cluster_config("leader_id").await.unwrap();
         assert_eq!(val.as_deref(), Some("node-xyz"));
     }

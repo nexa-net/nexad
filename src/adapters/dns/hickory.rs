@@ -31,13 +31,13 @@ impl HickoryDnsProvider {
         let listen_addr = self.listen_addr;
         let upstream_dns = self.upstream_dns;
 
-        let udp_socket = UdpSocket::bind(listen_addr)
-            .await
-            .map_err(|e| NexaError::Runtime(format!("failed to bind DNS UDP on {listen_addr}: {e}")))?;
+        let udp_socket = UdpSocket::bind(listen_addr).await.map_err(|e| {
+            NexaError::Runtime(format!("failed to bind DNS UDP on {listen_addr}: {e}"))
+        })?;
 
-        let tcp_listener = TcpListener::bind(listen_addr)
-            .await
-            .map_err(|e| NexaError::Runtime(format!("failed to bind DNS TCP on {listen_addr}: {e}")))?;
+        let tcp_listener = TcpListener::bind(listen_addr).await.map_err(|e| {
+            NexaError::Runtime(format!("failed to bind DNS TCP on {listen_addr}: {e}"))
+        })?;
 
         info!(%listen_addr, %upstream_dns, "starting embedded DNS server");
 
@@ -71,7 +71,9 @@ impl HickoryDnsProvider {
                     Ok((stream, _addr)) => {
                         let store = tcp_store.clone();
                         tokio::spawn(async move {
-                            if let Err(e) = handle_tcp_dns_client(stream, &store, tcp_upstream).await {
+                            if let Err(e) =
+                                handle_tcp_dns_client(stream, &store, tcp_upstream).await
+                            {
                                 error!(%e, "DNS TCP handler error");
                             }
                         });
@@ -156,7 +158,14 @@ async fn handle_dns_query(
     let name_lower = query_name.to_lowercase();
     if name_lower.ends_with(".internal") || name_lower.ends_with(".internal.") {
         let ips = store.resolve(&name_lower);
-        return Some(build_dns_response(id, data, &query_name, question_end, qtype, ips));
+        return Some(build_dns_response(
+            id,
+            data,
+            &query_name,
+            question_end,
+            qtype,
+            ips,
+        ));
     }
 
     forward_to_upstream(data, upstream).await
@@ -217,7 +226,11 @@ fn build_dns_response(
         .collect();
 
     let an_count = matching_ips.len() as u16;
-    let rcode = if matching_ips.is_empty() && ips.is_empty() { 3u16 } else { 0u16 };
+    let rcode = if matching_ips.is_empty() && ips.is_empty() {
+        3u16
+    } else {
+        0u16
+    };
 
     let flags: u16 = 0x8000 | 0x0400 | 0x0080 | rcode;
 
@@ -285,8 +298,14 @@ mod tests {
             "127.0.0.1:15353".parse().unwrap(),
             "8.8.8.8:53".parse().unwrap(),
         );
-        provider.register("ecommerce", "api", ip4(10, 0, 0, 1)).await.unwrap();
-        provider.register("ecommerce", "api", ip4(10, 0, 0, 2)).await.unwrap();
+        provider
+            .register("ecommerce", "api", ip4(10, 0, 0, 1))
+            .await
+            .unwrap();
+        provider
+            .register("ecommerce", "api", ip4(10, 0, 0, 2))
+            .await
+            .unwrap();
         let ips = provider.lookup("ecommerce", "api").await.unwrap();
         assert_eq!(ips, vec![ip4(10, 0, 0, 1), ip4(10, 0, 0, 2)]);
     }
@@ -297,8 +316,14 @@ mod tests {
             "127.0.0.1:15354".parse().unwrap(),
             "8.8.8.8:53".parse().unwrap(),
         );
-        provider.register("app", "web", ip4(10, 0, 0, 1)).await.unwrap();
-        provider.deregister("app", "web", ip4(10, 0, 0, 1)).await.unwrap();
+        provider
+            .register("app", "web", ip4(10, 0, 0, 1))
+            .await
+            .unwrap();
+        provider
+            .deregister("app", "web", ip4(10, 0, 0, 1))
+            .await
+            .unwrap();
         let ips = provider.lookup("app", "web").await.unwrap();
         assert!(ips.is_empty());
     }
@@ -306,12 +331,14 @@ mod tests {
     #[test]
     fn parse_question_extracts_name_and_type() {
         let mut data = vec![
-            0x00, 0x01, 0x01, 0x00,
-            0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x01, 0x01, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
         ];
-        data.push(3); data.extend_from_slice(b"api");
-        data.push(9); data.extend_from_slice(b"ecommerce");
-        data.push(8); data.extend_from_slice(b"internal");
+        data.push(3);
+        data.extend_from_slice(b"api");
+        data.push(9);
+        data.extend_from_slice(b"ecommerce");
+        data.push(8);
+        data.extend_from_slice(b"internal");
         data.push(0);
         data.extend_from_slice(&[0x00, 0x01]);
         data.extend_from_slice(&[0x00, 0x01]);
@@ -324,19 +351,28 @@ mod tests {
     #[test]
     fn build_response_with_ips() {
         let mut query = vec![
-            0x00, 0x42, 0x01, 0x00,
-            0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x42, 0x01, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
         ];
-        query.push(3); query.extend_from_slice(b"api");
-        query.push(9); query.extend_from_slice(b"ecommerce");
-        query.push(8); query.extend_from_slice(b"internal");
+        query.push(3);
+        query.extend_from_slice(b"api");
+        query.push(9);
+        query.extend_from_slice(b"ecommerce");
+        query.push(8);
+        query.extend_from_slice(b"internal");
         query.push(0);
         query.extend_from_slice(&[0x00, 0x01, 0x00, 0x01]);
 
         let question_end = query.len();
         let ips = Some(vec![ip4(10, 0, 0, 1), ip4(10, 0, 0, 2)]);
 
-        let response = build_dns_response(0x0042, &query, "api.ecommerce.internal", question_end, 1, ips);
+        let response = build_dns_response(
+            0x0042,
+            &query,
+            "api.ecommerce.internal",
+            question_end,
+            1,
+            ips,
+        );
 
         assert_eq!(response[0..2], [0x00, 0x42]);
         let flags = u16::from_be_bytes([response[2], response[3]]);
@@ -349,18 +385,21 @@ mod tests {
     #[test]
     fn build_response_nxdomain_when_no_ips() {
         let mut query = vec![
-            0x00, 0x01, 0x01, 0x00,
-            0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x01, 0x01, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
         ];
-        query.push(3); query.extend_from_slice(b"xxx");
-        query.push(3); query.extend_from_slice(b"yyy");
-        query.push(8); query.extend_from_slice(b"internal");
+        query.push(3);
+        query.extend_from_slice(b"xxx");
+        query.push(3);
+        query.extend_from_slice(b"yyy");
+        query.push(8);
+        query.extend_from_slice(b"internal");
         query.push(0);
         query.extend_from_slice(&[0x00, 0x01, 0x00, 0x01]);
 
         let question_end = query.len();
 
-        let response = build_dns_response(0x0001, &query, "xxx.yyy.internal", question_end, 1, None);
+        let response =
+            build_dns_response(0x0001, &query, "xxx.yyy.internal", question_end, 1, None);
         let flags = u16::from_be_bytes([response[2], response[3]]);
         let rcode = flags & 0x000F;
         assert_eq!(rcode, 3);
@@ -392,8 +431,7 @@ mod tests {
 
     fn build_test_dns_query(domain: &str) -> Vec<u8> {
         let mut data = vec![
-            0x00, 0x01, 0x01, 0x00,
-            0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x01, 0x01, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
         ];
         for label in domain.split('.') {
             data.push(label.len() as u8);

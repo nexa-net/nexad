@@ -135,10 +135,7 @@ pub fn collect_resources() -> NodeResources {
 
 /// Runs on a worker. Opens a bidirectional heartbeat stream to the master and
 /// sends periodic pings. Returns only on connection failure.
-pub async fn run_heartbeat_sender(
-    master_addr: String,
-    node_id: Uuid,
-) -> anyhow::Result<()> {
+pub async fn run_heartbeat_sender(master_addr: String, node_id: Uuid) -> anyhow::Result<()> {
     let endpoint = format!("http://{}", master_addr);
     let mut client = ClusterServiceClient::connect(endpoint).await?;
 

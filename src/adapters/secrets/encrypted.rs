@@ -239,10 +239,7 @@ mod tests {
         let result = store2.get("proj", "KEY").await;
         assert!(result.is_err(), "decryption with wrong key should fail");
         let err = result.unwrap_err().to_string();
-        assert!(
-            err.contains("decryption failed"),
-            "unexpected error: {err}"
-        );
+        assert!(err.contains("decryption failed"), "unexpected error: {err}");
     }
 
     #[tokio::test]

@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use tracing::{info, warn, error};
+use tracing::{error, info, warn};
 
 use nexa_core::ports::route_store::RouteStore;
 
@@ -16,8 +16,7 @@ pub fn spawn_renewal_task(
     tokio::spawn(async move {
         info!(
             interval_secs = check_interval.as_secs(),
-            renew_before_days,
-            "TLS auto-renewal task started"
+            renew_before_days, "TLS auto-renewal task started"
         );
 
         loop {
@@ -30,7 +29,10 @@ pub fn spawn_renewal_task(
                         continue;
                     }
 
-                    info!(count = certs.len(), "found expiring certificates, attempting renewal");
+                    info!(
+                        count = certs.len(),
+                        "found expiring certificates, attempting renewal"
+                    );
 
                     for cert in &certs {
                         info!(domain = cert.domain, expires_at = %cert.expires_at, "renewing certificate");

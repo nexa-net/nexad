@@ -13,7 +13,10 @@ pub struct NginxBackend {
 
 impl NginxBackend {
     pub fn new(conf_dir: PathBuf, nginx_bin: String) -> Self {
-        Self { conf_dir, nginx_bin }
+        Self {
+            conf_dir,
+            nginx_bin,
+        }
     }
 
     fn conf_path(&self, domain: &str) -> PathBuf {
@@ -28,7 +31,10 @@ impl NginxBackend {
         cfg.push_str(&format!("upstream {domain_underscored} {{\n"));
         for up in &route.upstream {
             if up.weight > 1 {
-                cfg.push_str(&format!("    server {} weight={};\n", up.address, up.weight));
+                cfg.push_str(&format!(
+                    "    server {} weight={};\n",
+                    up.address, up.weight
+                ));
             } else {
                 cfg.push_str(&format!("    server {};\n", up.address));
             }
@@ -47,7 +53,9 @@ impl NginxBackend {
                 cfg.push_str("    listen 80;\n");
                 cfg.push_str(&format!("    server_name {};\n\n", route.domain));
                 cfg.push_str("    location / {\n");
-                cfg.push_str(&format!("        proxy_pass http://{domain_underscored};\n"));
+                cfg.push_str(&format!(
+                    "        proxy_pass http://{domain_underscored};\n"
+                ));
                 cfg.push_str(
                     &proxy_headers
                         .lines()
@@ -82,11 +90,11 @@ impl NginxBackend {
                     "    ssl_certificate_key /etc/letsencrypt/live/{}/privkey.pem;\n",
                     route.domain
                 ));
-                cfg.push_str(&format!(
-                    "    # Managed by Certbot for {email}\n\n"
-                ));
+                cfg.push_str(&format!("    # Managed by Certbot for {email}\n\n"));
                 cfg.push_str("    location / {\n");
-                cfg.push_str(&format!("        proxy_pass http://{domain_underscored};\n"));
+                cfg.push_str(&format!(
+                    "        proxy_pass http://{domain_underscored};\n"
+                ));
                 cfg.push_str(
                     &proxy_headers
                         .lines()
@@ -110,16 +118,12 @@ impl NginxBackend {
                 cfg.push_str("server {\n");
                 cfg.push_str("    listen 443 ssl;\n");
                 cfg.push_str(&format!("    server_name {};\n\n", route.domain));
-                cfg.push_str(&format!(
-                    "    ssl_certificate {};\n",
-                    cert.display()
-                ));
-                cfg.push_str(&format!(
-                    "    ssl_certificate_key {};\n\n",
-                    key.display()
-                ));
+                cfg.push_str(&format!("    ssl_certificate {};\n", cert.display()));
+                cfg.push_str(&format!("    ssl_certificate_key {};\n\n", key.display()));
                 cfg.push_str("    location / {\n");
-                cfg.push_str(&format!("        proxy_pass http://{domain_underscored};\n"));
+                cfg.push_str(&format!(
+                    "        proxy_pass http://{domain_underscored};\n"
+                ));
                 cfg.push_str(
                     &proxy_headers
                         .lines()
@@ -141,9 +145,12 @@ impl ProxyBackend for NginxBackend {
         for route in routes {
             let path = self.conf_path(&route.domain);
             let content = Self::render_config(route);
-            tokio::fs::write(&path, &content)
-                .await
-                .map_err(|e| NexaError::Proxy(format!("failed to write nginx config {}: {e}", path.display())))?;
+            tokio::fs::write(&path, &content).await.map_err(|e| {
+                NexaError::Proxy(format!(
+                    "failed to write nginx config {}: {e}",
+                    path.display()
+                ))
+            })?;
             info!(domain = %route.domain, path = %path.display(), "wrote nginx config");
         }
         Ok(())
@@ -211,8 +218,14 @@ mod tests {
         RouteConfig {
             domain: "secure.example.com".into(),
             upstream: vec![
-                Upstream { address: "10.0.0.1:8080".into(), weight: 3 },
-                Upstream { address: "10.0.0.2:8080".into(), weight: 1 },
+                Upstream {
+                    address: "10.0.0.1:8080".into(),
+                    weight: 3,
+                },
+                Upstream {
+                    address: "10.0.0.2:8080".into(),
+                    weight: 1,
+                },
             ],
             tls: TlsConfig::Auto {
                 email: "admin@example.com".into(),
@@ -282,7 +295,10 @@ mod tests {
     fn conf_path_uses_domain() {
         let backend = NginxBackend::new(PathBuf::from("/etc/nginx/conf.d"), "nginx".into());
         let path = backend.conf_path("api.example.com");
-        assert_eq!(path, PathBuf::from("/etc/nginx/conf.d/nexa-api.example.com.conf"));
+        assert_eq!(
+            path,
+            PathBuf::from("/etc/nginx/conf.d/nexa-api.example.com.conf")
+        );
     }
 
     #[tokio::test]

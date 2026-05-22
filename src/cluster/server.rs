@@ -197,10 +197,7 @@ impl ClusterService for ClusterServer {
         let mut labels = std::collections::HashMap::new();
         labels.insert("managed-by".to_string(), "nexanet".to_string());
         labels.insert("nexa.project".to_string(), spec.project.clone());
-        labels.insert(
-            "nexa.deployment".to_string(),
-            spec.deployment.name.clone(),
-        );
+        labels.insert("nexa.deployment".to_string(), spec.deployment.name.clone());
         labels.insert("nexa.pod-id".to_string(), pod.id.to_string());
 
         // VolumeSpec uses source_name() and mount_point() methods

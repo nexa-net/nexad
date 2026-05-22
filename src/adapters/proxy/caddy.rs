@@ -41,19 +41,12 @@ impl CaddyBackend {
                 }
                 TlsConfig::Manual { cert, key } => {
                     output.push_str(&format!("{} {{\n", route.domain));
-                    output.push_str(&format!(
-                        "    tls {} {}\n",
-                        cert.display(),
-                        key.display()
-                    ));
+                    output.push_str(&format!("    tls {} {}\n", cert.display(), key.display()));
                 }
             }
 
             if has_multiple_upstreams {
-                output.push_str(&format!(
-                    "    reverse_proxy {} {{\n",
-                    addrs.join(" ")
-                ));
+                output.push_str(&format!("    reverse_proxy {} {{\n", addrs.join(" ")));
                 if has_weights {
                     output.push_str("        lb_policy weighted_round_robin\n");
                 }
@@ -95,9 +88,7 @@ impl ProxyBackend for CaddyBackend {
                 return Ok(());
             }
             Err(e) => {
-                return Err(NexaError::Proxy(format!(
-                    "failed to read Caddyfile: {e}"
-                )));
+                return Err(NexaError::Proxy(format!("failed to read Caddyfile: {e}")));
             }
         };
 
@@ -153,9 +144,7 @@ impl ProxyBackend for CaddyBackend {
 
         tokio::fs::write(&self.caddyfile_path, &final_content)
             .await
-            .map_err(|e| {
-                NexaError::Proxy(format!("failed to rewrite Caddyfile: {e}"))
-            })?;
+            .map_err(|e| NexaError::Proxy(format!("failed to rewrite Caddyfile: {e}")))?;
         info!(domain, "removed route from Caddyfile");
         Ok(())
     }
@@ -243,8 +232,14 @@ mod tests {
         RouteConfig {
             domain: "balanced.example.com".into(),
             upstream: vec![
-                Upstream { address: "10.0.0.1:8080".into(), weight: 3 },
-                Upstream { address: "10.0.0.2:8080".into(), weight: 1 },
+                Upstream {
+                    address: "10.0.0.1:8080".into(),
+                    weight: 3,
+                },
+                Upstream {
+                    address: "10.0.0.2:8080".into(),
+                    weight: 1,
+                },
             ],
             tls: TlsConfig::Auto {
                 email: "ops@example.com".into(),

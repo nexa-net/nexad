@@ -4,8 +4,8 @@ use std::sync::RwLock;
 use async_trait::async_trait;
 use chrono::{Duration, Utc};
 
-use nexa_core::error::{NexaError, Result};
 use nexa_core::domain::models::{Certificate, Route, SubnetAllocation};
+use nexa_core::error::{NexaError, Result};
 use nexa_core::ports::route_store::RouteStore;
 
 pub struct InMemoryRouteStore {
@@ -107,7 +107,11 @@ impl RouteStore for InMemoryRouteStore {
         Ok(())
     }
 
-    async fn get_node_subnet(&self, node_id: &str, project: &str) -> Result<Option<SubnetAllocation>> {
+    async fn get_node_subnet(
+        &self,
+        node_id: &str,
+        project: &str,
+    ) -> Result<Option<SubnetAllocation>> {
         let subnets = self.subnets.read().unwrap();
         Ok(subnets
             .iter()
@@ -156,8 +160,14 @@ mod tests {
     #[tokio::test]
     async fn list_routes_filter_by_project() {
         let store = InMemoryRouteStore::new();
-        store.insert_route(&Route::new("a.example.com", "proj-a", "api", TlsMode::None)).await.unwrap();
-        store.insert_route(&Route::new("b.example.com", "proj-b", "web", TlsMode::Auto)).await.unwrap();
+        store
+            .insert_route(&Route::new("a.example.com", "proj-a", "api", TlsMode::None))
+            .await
+            .unwrap();
+        store
+            .insert_route(&Route::new("b.example.com", "proj-b", "web", TlsMode::Auto))
+            .await
+            .unwrap();
 
         let all = store.list_routes(None).await.unwrap();
         assert_eq!(all.len(), 2);
@@ -170,7 +180,10 @@ mod tests {
     #[tokio::test]
     async fn delete_route() {
         let store = InMemoryRouteStore::new();
-        store.insert_route(&Route::new("api.example.com", "p", "d", TlsMode::None)).await.unwrap();
+        store
+            .insert_route(&Route::new("api.example.com", "p", "d", TlsMode::None))
+            .await
+            .unwrap();
         assert!(store.delete_route("api.example.com").await.unwrap());
         assert!(!store.delete_route("api.example.com").await.unwrap());
         assert!(store.get_route("api.example.com").await.unwrap().is_none());
@@ -190,7 +203,11 @@ mod tests {
         };
         store.upsert_certificate(&cert).await.unwrap();
 
-        let fetched = store.get_certificate("api.example.com").await.unwrap().unwrap();
+        let fetched = store
+            .get_certificate("api.example.com")
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!(fetched.cert_pem, b"CERT");
     }
 
@@ -253,27 +270,35 @@ mod tests {
     #[tokio::test]
     async fn allocate_same_subnet_different_node_fails() {
         let store = InMemoryRouteStore::new();
-        store.allocate_subnet(&SubnetAllocation {
-            node_id: "node-1".into(),
-            project: "ecommerce".into(),
-            subnet: "172.20.1.0/24".into(),
-        }).await.unwrap();
-        let result = store.allocate_subnet(&SubnetAllocation {
-            node_id: "node-2".into(),
-            project: "ecommerce".into(),
-            subnet: "172.20.1.0/24".into(),
-        }).await;
+        store
+            .allocate_subnet(&SubnetAllocation {
+                node_id: "node-1".into(),
+                project: "ecommerce".into(),
+                subnet: "172.20.1.0/24".into(),
+            })
+            .await
+            .unwrap();
+        let result = store
+            .allocate_subnet(&SubnetAllocation {
+                node_id: "node-2".into(),
+                project: "ecommerce".into(),
+                subnet: "172.20.1.0/24".into(),
+            })
+            .await;
         assert!(result.is_err());
     }
 
     #[tokio::test]
     async fn deallocate_subnet() {
         let store = InMemoryRouteStore::new();
-        store.allocate_subnet(&SubnetAllocation {
-            node_id: "node-1".into(),
-            project: "p".into(),
-            subnet: "172.20.1.0/24".into(),
-        }).await.unwrap();
+        store
+            .allocate_subnet(&SubnetAllocation {
+                node_id: "node-1".into(),
+                project: "p".into(),
+                subnet: "172.20.1.0/24".into(),
+            })
+            .await
+            .unwrap();
         assert!(store.deallocate_subnet("node-1", "p").await.unwrap());
         assert!(!store.deallocate_subnet("node-1", "p").await.unwrap());
     }

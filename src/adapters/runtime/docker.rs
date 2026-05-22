@@ -1,19 +1,19 @@
 use std::collections::HashMap;
 
 use async_trait::async_trait;
+use bollard::Docker;
 use bollard::container::{
     Config, CreateContainerOptions, ListContainersOptions, LogsOptions, RemoveContainerOptions,
     StopContainerOptions,
 };
 use bollard::image::CreateImageOptions;
-use bollard::network::{ConnectNetworkOptions, CreateNetworkOptions};
-use bollard::Docker;
 use bollard::models::{EndpointSettings, HostConfig, PortBinding as BollardPortBinding};
+use bollard::network::{ConnectNetworkOptions, CreateNetworkOptions};
 use futures::StreamExt;
 use tracing::{debug, info};
 
-use nexa_core::ports::runtime::*;
 use nexa_core::error::{NexaError, Result};
+use nexa_core::ports::runtime::*;
 
 pub struct DockerRuntime {
     client: Docker,
@@ -61,7 +61,11 @@ impl ContainerRuntime for DockerRuntime {
     }
 
     async fn create_container(&self, config: &ContainerConfig) -> Result<String> {
-        debug!(name = config.name, image = config.image, "creating container");
+        debug!(
+            name = config.name,
+            image = config.image,
+            "creating container"
+        );
         let env: Vec<String> = config.env.iter().map(|(k, v)| format!("{k}={v}")).collect();
         let mut port_bindings: HashMap<String, Option<Vec<BollardPortBinding>>> = HashMap::new();
         let mut exposed_ports: HashMap<String, HashMap<(), ()>> = HashMap::new();
@@ -91,8 +95,16 @@ impl ContainerRuntime for DockerRuntime {
             port_bindings: Some(port_bindings),
             binds: Some(binds),
             network_mode: config.network.clone(),
-            dns: if config.dns.is_empty() { None } else { Some(config.dns.clone()) },
-            dns_search: if config.dns_search.is_empty() { None } else { Some(config.dns_search.clone()) },
+            dns: if config.dns.is_empty() {
+                None
+            } else {
+                Some(config.dns.clone())
+            },
+            dns_search: if config.dns_search.is_empty() {
+                None
+            } else {
+                Some(config.dns_search.clone())
+            },
             ..Default::default()
         };
         let container_config = Config {
@@ -162,14 +174,20 @@ impl ContainerRuntime for DockerRuntime {
             Some(bollard::models::ContainerStateStatusEnum::CREATED) => ContainerState::Created,
             Some(bollard::models::ContainerStateStatusEnum::EXITED) => ContainerState::Exited,
             Some(bollard::models::ContainerStateStatusEnum::PAUSED) => ContainerState::Paused,
-            Some(bollard::models::ContainerStateStatusEnum::RESTARTING) => ContainerState::Restarting,
+            Some(bollard::models::ContainerStateStatusEnum::RESTARTING) => {
+                ContainerState::Restarting
+            }
             Some(bollard::models::ContainerStateStatusEnum::REMOVING) => ContainerState::Removing,
             Some(bollard::models::ContainerStateStatusEnum::DEAD) => ContainerState::Dead,
             _ => ContainerState::Unknown,
         };
         Ok(ContainerInfo {
             id: info.id.unwrap_or_default(),
-            name: info.name.unwrap_or_default().trim_start_matches('/').to_string(),
+            name: info
+                .name
+                .unwrap_or_default()
+                .trim_start_matches('/')
+                .to_string(),
             image: info.config.and_then(|c| c.image).unwrap_or_default(),
             state,
         })
@@ -248,7 +266,8 @@ impl ContainerRuntime for DockerRuntime {
     }
 
     async fn container_ip(&self, container_id: &str, network: &str) -> Result<String> {
-        let info = self.client
+        let info = self
+            .client
             .inspect_container(container_id, None)
             .await
             .map_err(|e| NexaError::Runtime(e.to_string()))?;
@@ -259,16 +278,18 @@ impl ContainerRuntime for DockerRuntime {
             .and_then(|mut nets| nets.remove(network))
             .and_then(|ep| ep.ip_address)
             .filter(|ip| !ip.is_empty())
-            .ok_or_else(|| NexaError::Runtime(
-                format!("no IP found for container {container_id} on network {network}")
-            ))?;
+            .ok_or_else(|| {
+                NexaError::Runtime(format!(
+                    "no IP found for container {container_id} on network {network}"
+                ))
+            })?;
 
         Ok(ip)
     }
 
     async fn events(&self) -> Result<EventStream> {
-        use std::collections::HashMap as StdHashMap;
         use bollard::system::EventsOptions;
+        use std::collections::HashMap as StdHashMap;
 
         let mut filters = StdHashMap::new();
         filters.insert("type".to_string(), vec!["container".to_string()]);
@@ -276,10 +297,7 @@ impl ContainerRuntime for DockerRuntime {
             "event".to_string(),
             vec!["die".to_string(), "start".to_string(), "oom".to_string()],
         );
-        filters.insert(
-            "label".to_string(),
-            vec!["managed-by=nexanet".to_string()],
-        );
+        filters.insert("label".to_string(), vec!["managed-by=nexanet".to_string()]);
 
         let options = EventsOptions::<String> {
             since: None,
@@ -307,7 +325,10 @@ impl ContainerRuntime for DockerRuntime {
                                 .and_then(|attrs| attrs.get("exitCode"))
                                 .and_then(|code| code.parse::<i64>().ok())
                                 .unwrap_or(-1);
-                            Some(RuntimeEvent::ContainerDied { container_id, exit_code })
+                            Some(RuntimeEvent::ContainerDied {
+                                container_id,
+                                exit_code,
+                            })
                         }
                         "start" => Some(RuntimeEvent::ContainerStarted { container_id }),
                         "oom" => Some(RuntimeEvent::ContainerOom { container_id }),

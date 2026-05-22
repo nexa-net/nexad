@@ -17,8 +17,8 @@ pub fn load_or_generate(data_dir: &Path) -> Result<[u8; KEY_LEN]> {
 }
 
 fn load_key(path: &Path) -> Result<[u8; KEY_LEN]> {
-    let bytes = fs::read(path)
-        .map_err(|e| NexaError::Secret(format!("failed to read master key: {e}")))?;
+    let bytes =
+        fs::read(path).map_err(|e| NexaError::Secret(format!("failed to read master key: {e}")))?;
     if bytes.len() != KEY_LEN {
         return Err(NexaError::Secret(format!(
             "master key invalid length: expected {KEY_LEN}, got {}",
@@ -34,15 +34,13 @@ fn generate_key(path: &Path) -> Result<[u8; KEY_LEN]> {
     use rand::RngCore;
 
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)
-            .map_err(|e| NexaError::Secret(format!("mkdir failed: {e}")))?;
+        fs::create_dir_all(parent).map_err(|e| NexaError::Secret(format!("mkdir failed: {e}")))?;
     }
 
     let mut key = [0u8; KEY_LEN];
     rand::thread_rng().fill_bytes(&mut key);
 
-    fs::write(path, &key)
-        .map_err(|e| NexaError::Secret(format!("write key failed: {e}")))?;
+    fs::write(path, &key).map_err(|e| NexaError::Secret(format!("write key failed: {e}")))?;
 
     #[cfg(unix)]
     {

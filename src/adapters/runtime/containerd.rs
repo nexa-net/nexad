@@ -175,7 +175,11 @@ impl ContainerRuntime for ContainerdRuntime {
 
         // Mount binds.
         for vol in &config.volumes {
-            let opts = if vol.read_only { "rbind:ro" } else { "rbind:rw" };
+            let opts = if vol.read_only {
+                "rbind:ro"
+            } else {
+                "rbind:rw"
+            };
             args.push("--mount".to_string());
             args.push(format!(
                 "type=bind,src={},dst={},options={}",
@@ -243,7 +247,9 @@ impl ContainerRuntime for ContainerdRuntime {
         debug!(id, timeout_secs, "stopping container via ctr");
 
         // Send SIGTERM first.
-        let result = self.ctr(&["tasks", "kill", "--signal", "SIGTERM", id]).await?;
+        let result = self
+            .ctr(&["tasks", "kill", "--signal", "SIGTERM", id])
+            .await?;
         if !result.status.success() {
             let stderr = String::from_utf8_lossy(&result.stderr);
             // Task might already be stopped — don't fail immediately.
@@ -252,8 +258,7 @@ impl ContainerRuntime for ContainerdRuntime {
         }
 
         // Wait for the container to exit within the timeout.
-        let deadline =
-            tokio::time::Instant::now() + std::time::Duration::from_secs(timeout_secs);
+        let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(timeout_secs);
         loop {
             if tokio::time::Instant::now() >= deadline {
                 break;

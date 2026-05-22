@@ -75,11 +75,7 @@ impl DnsRecordStore {
         }
 
         let ips = self.lookup(project, host);
-        if ips.is_empty() {
-            None
-        } else {
-            Some(ips)
-        }
+        if ips.is_empty() { None } else { Some(ips) }
     }
 }
 
@@ -146,8 +142,14 @@ mod tests {
         store.register("ecommerce", "api", ip(10, 0, 0, 1));
         store.register("ecommerce", "api", ip(10, 0, 0, 2));
         store.register("ecommerce", "api", ip(10, 0, 0, 3));
-        assert_eq!(store.lookup_replica("ecommerce", "api", 0), Some(ip(10, 0, 0, 1)));
-        assert_eq!(store.lookup_replica("ecommerce", "api", 2), Some(ip(10, 0, 0, 3)));
+        assert_eq!(
+            store.lookup_replica("ecommerce", "api", 0),
+            Some(ip(10, 0, 0, 1))
+        );
+        assert_eq!(
+            store.lookup_replica("ecommerce", "api", 2),
+            Some(ip(10, 0, 0, 3))
+        );
         assert_eq!(store.lookup_replica("ecommerce", "api", 5), None);
     }
 
@@ -204,7 +206,13 @@ mod tests {
         let store = DnsRecordStore::new();
         store.register("proj-a", "api", ip(10, 0, 0, 1));
         store.register("proj-b", "api", ip(10, 0, 0, 2));
-        assert_eq!(store.resolve("api.proj-a.internal").unwrap(), vec![ip(10, 0, 0, 1)]);
-        assert_eq!(store.resolve("api.proj-b.internal").unwrap(), vec![ip(10, 0, 0, 2)]);
+        assert_eq!(
+            store.resolve("api.proj-a.internal").unwrap(),
+            vec![ip(10, 0, 0, 1)]
+        );
+        assert_eq!(
+            store.resolve("api.proj-b.internal").unwrap(),
+            vec![ip(10, 0, 0, 2)]
+        );
     }
 }

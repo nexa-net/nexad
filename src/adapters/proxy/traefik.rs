@@ -179,9 +179,7 @@ impl ProxyBackend for TraefikBackend {
 
         tokio::fs::write(&self.config_path, &yaml)
             .await
-            .map_err(|e| {
-                NexaError::Proxy(format!("failed to rewrite traefik config: {e}"))
-            })?;
+            .map_err(|e| NexaError::Proxy(format!("failed to rewrite traefik config: {e}")))?;
         info!(domain, "removed route from traefik config");
         Ok(())
     }
@@ -215,8 +213,14 @@ mod tests {
             RouteConfig {
                 domain: "app.example.com".into(),
                 upstream: vec![
-                    Upstream { address: "10.0.0.1:8080".into(), weight: 3 },
-                    Upstream { address: "10.0.0.2:8080".into(), weight: 1 },
+                    Upstream {
+                        address: "10.0.0.1:8080".into(),
+                        weight: 3,
+                    },
+                    Upstream {
+                        address: "10.0.0.2:8080".into(),
+                        weight: 1,
+                    },
                 ],
                 tls: TlsConfig::Auto {
                     email: "admin@example.com".into(),
@@ -248,8 +252,18 @@ mod tests {
         assert!(parsed.http.routers.contains_key("nexa-plain-example-com"));
 
         // Check service naming
-        assert!(parsed.http.services.contains_key("nexa-svc-app-example-com"));
-        assert!(parsed.http.services.contains_key("nexa-svc-plain-example-com"));
+        assert!(
+            parsed
+                .http
+                .services
+                .contains_key("nexa-svc-app-example-com")
+        );
+        assert!(
+            parsed
+                .http
+                .services
+                .contains_key("nexa-svc-plain-example-com")
+        );
     }
 
     #[test]

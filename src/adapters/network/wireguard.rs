@@ -184,11 +184,7 @@ mod tests {
         let peer_key = WgKeypair::generate();
         let endpoint: SocketAddr = "192.168.1.100:51820".parse().unwrap();
 
-        let peer_config = mgr.peer_config_for_node(
-            peer_key.public_key,
-            endpoint,
-            "172.20.1.0/24",
-        );
+        let peer_config = mgr.peer_config_for_node(peer_key.public_key, endpoint, "172.20.1.0/24");
 
         assert_eq!(peer_config.public_key, peer_key.public_key);
         assert_eq!(peer_config.endpoint, Some(endpoint));

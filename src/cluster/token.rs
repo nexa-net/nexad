@@ -82,10 +82,12 @@ mod tests {
 
     #[test]
     fn validate_format_rejects_missing_prefix() {
-        assert!(validate_token_format(
-            "abc_1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
-        )
-        .is_err());
+        assert!(
+            validate_token_format(
+                "abc_1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+            )
+            .is_err()
+        );
     }
 
     #[test]

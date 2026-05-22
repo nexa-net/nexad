@@ -1,9 +1,9 @@
-use axum::routing::{delete, get, post};
 use axum::Router;
+use axum::routing::{delete, get, post};
 use tower_http::trace::TraceLayer;
 
-use super::handlers;
 use super::AppState;
+use super::handlers;
 
 pub fn build(state: AppState) -> Router {
     Router::new()
@@ -18,10 +18,7 @@ pub fn build(state: AppState) -> Router {
             "/api/v1/projects/{name}/resume",
             post(handlers::resume_project),
         )
-        .route(
-            "/api/v1/projects/{name}",
-            delete(handlers::delete_project),
-        )
+        .route("/api/v1/projects/{name}", delete(handlers::delete_project))
         .route("/api/v1/deployments", get(handlers::list_deployments))
         .route("/api/v1/deploy", post(handlers::deploy))
         .route(
@@ -62,13 +59,16 @@ pub fn build(state: AppState) -> Router {
         )
         // Node management routes
         .route("/api/v1/nodes", get(handlers::list_nodes))
-        .route(
-            "/api/v1/nodes/{name}/drain",
-            post(handlers::drain_node),
-        )
+        .route("/api/v1/nodes/{name}/drain", post(handlers::drain_node))
         .route("/api/v1/nodes/{name}", delete(handlers::remove_node))
-        .route("/api/v1/cluster/scheduler", get(handlers::get_scheduler_config))
-        .route("/api/v1/cluster/scheduler", post(handlers::set_scheduler_config))
+        .route(
+            "/api/v1/cluster/scheduler",
+            get(handlers::get_scheduler_config),
+        )
+        .route(
+            "/api/v1/cluster/scheduler",
+            post(handlers::set_scheduler_config),
+        )
         // Routes
         .route("/api/v1/routes", get(handlers::list_routes))
         .route("/api/v1/routes", post(handlers::add_route))
@@ -76,8 +76,14 @@ pub fn build(state: AppState) -> Router {
         // Certificates
         .route("/api/v1/certs/import", post(handlers::import_cert))
         // Proxy config
-        .route("/api/v1/cluster/config/proxy", get(handlers::get_proxy_config))
-        .route("/api/v1/cluster/config/proxy", post(handlers::set_proxy_config))
+        .route(
+            "/api/v1/cluster/config/proxy",
+            get(handlers::get_proxy_config),
+        )
+        .route(
+            "/api/v1/cluster/config/proxy",
+            post(handlers::set_proxy_config),
+        )
         .layer(TraceLayer::new_for_http())
         .with_state(state)
 }

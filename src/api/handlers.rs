@@ -1,8 +1,8 @@
+use axum::Json;
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
-use axum::response::sse::{Event, Sse};
 use axum::response::IntoResponse;
-use axum::Json;
+use axum::response::sse::{Event, Sse};
 use futures::StreamExt;
 use serde::Deserialize;
 
@@ -69,7 +69,9 @@ pub async fn deploy(State(state): AppStateExtractor, body: String) -> impl IntoR
     };
 
     match state.handle.deploy(spec).await {
-        Ok(deployment) => (StatusCode::CREATED, Json(serde_json::json!(deployment))).into_response(),
+        Ok(deployment) => {
+            (StatusCode::CREATED, Json(serde_json::json!(deployment))).into_response()
+        }
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(serde_json::json!({ "error": e.to_string() })),
@@ -145,13 +147,14 @@ pub async fn logs(
 ) -> impl IntoResponse {
     match state.handle.pod_logs(project, name, query.tail).await {
         Ok(stream) => {
-            let event_stream =
-                stream.map(|result| -> std::result::Result<Event, std::convert::Infallible> {
+            let event_stream = stream.map(
+                |result| -> std::result::Result<Event, std::convert::Infallible> {
                     match result {
                         Ok(line) => Ok(Event::default().data(line)),
                         Err(e) => Ok(Event::default().data(format!("error: {e}"))),
                     }
-                });
+                },
+            );
             Sse::new(event_stream).into_response()
         }
         Err(e) => (
@@ -234,7 +237,11 @@ pub async fn set_secret(
     Path((project, name)): Path<(String, String)>,
     Json(req): Json<SetSecretRequest>,
 ) -> impl IntoResponse {
-    match state.handle.set_secret(project, name, req.value.into_bytes()).await {
+    match state
+        .handle
+        .set_secret(project, name, req.value.into_bytes())
+        .await
+    {
         Ok(()) => StatusCode::OK.into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -263,7 +270,11 @@ pub async fn delete_secret(
 pub async fn cluster_init(State(state): AppStateExtractor) -> impl IntoResponse {
     let token = nexad::cluster::token::generate_token();
     let hash = nexad::cluster::token::hash_token(&token);
-    match state.store.set_cluster_config("join_token_hash", &hash).await {
+    match state
+        .store
+        .set_cluster_config("join_token_hash", &hash)
+        .await
+    {
         Ok(()) => {
             let _ = state.store.set_cluster_config("join_token", &token).await;
             Json(serde_json::json!({ "token": token })).into_response()
@@ -295,7 +306,11 @@ pub async fn cluster_token_show(State(state): AppStateExtractor) -> impl IntoRes
 pub async fn cluster_token_rotate(State(state): AppStateExtractor) -> impl IntoResponse {
     let token = nexad::cluster::token::generate_token();
     let hash = nexad::cluster::token::hash_token(&token);
-    match state.store.set_cluster_config("join_token_hash", &hash).await {
+    match state
+        .store
+        .set_cluster_config("join_token_hash", &hash)
+        .await
+    {
         Ok(()) => {
             let _ = state.store.set_cluster_config("join_token", &token).await;
             Json(serde_json::json!({ "token": token })).into_response()
@@ -488,7 +503,12 @@ pub async fn add_route(
 ) -> impl IntoResponse {
     match state
         .handle
-        .add_route(req.domain.clone(), req.project, req.deployment, req.tls_mode)
+        .add_route(
+            req.domain.clone(),
+            req.project,
+            req.deployment,
+            req.tls_mode,
+        )
         .await
     {
         Ok(()) => (

@@ -36,16 +36,15 @@ impl ClusterTransport for LocalTransport {
         Ok(())
     }
 
-    async fn assign_pod(
-        &self,
-        _node_id: &Uuid,
-        pod: &Pod,
-        spec: &DeploymentSpec,
-    ) -> Result<()> {
+    async fn assign_pod(&self, _node_id: &Uuid, pod: &Pod, spec: &DeploymentSpec) -> Result<()> {
         let container_name = pod.container_name();
         let network_name = format!("nexa-{}", spec.project);
 
-        info!(name = container_name, image = spec.image, "local: creating pod");
+        info!(
+            name = container_name,
+            image = spec.image,
+            "local: creating pod"
+        );
 
         if let Err(e) = self.runtime.pull_image(&spec.image).await {
             tracing::warn!(image = spec.image, error = %e, "image pull failed, trying local");
@@ -77,10 +76,7 @@ impl ClusterTransport for LocalTransport {
         let mut labels = HashMap::new();
         labels.insert("managed-by".to_string(), "nexanet".to_string());
         labels.insert("nexa.project".to_string(), spec.project.clone());
-        labels.insert(
-            "nexa.deployment".to_string(),
-            spec.deployment.name.clone(),
-        );
+        labels.insert("nexa.deployment".to_string(), spec.deployment.name.clone());
         labels.insert("nexa.pod-id".to_string(), pod.id.to_string());
 
         // VolumeSpec uses source_name() and mount_point() methods
@@ -224,10 +220,12 @@ mod tests {
     async fn local_heartbeat_is_noop() {
         let runtime = Arc::new(MockRuntime::new());
         let transport = LocalTransport::new(runtime);
-        assert!(transport
-            .heartbeat(&Uuid::new_v4(), &NodeStatus::Ready, &NodeResources::zero())
-            .await
-            .is_ok());
+        assert!(
+            transport
+                .heartbeat(&Uuid::new_v4(), &NodeStatus::Ready, &NodeResources::zero())
+                .await
+                .is_ok()
+        );
     }
 
     #[tokio::test]
@@ -237,9 +235,7 @@ mod tests {
 
         let spec = DeploymentSpec {
             project: "test".into(),
-            deployment: DeploymentMeta {
-                name: "api".into(),
-            },
+            deployment: DeploymentMeta { name: "api".into() },
             replicas: 1,
             image: "nginx:latest".into(),
             ports: vec![8080],

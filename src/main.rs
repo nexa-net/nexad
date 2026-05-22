@@ -125,10 +125,16 @@ async fn init_infrastructure(
     let store: Arc<dyn StateStore> = Arc::new(store);
     info!(path = db_path, "state store initialized");
 
-    let kind: RuntimeKind = cli.runtime.parse().map_err(|e: String| anyhow::anyhow!(e))?;
+    let kind: RuntimeKind = cli
+        .runtime
+        .parse()
+        .map_err(|e: String| anyhow::anyhow!(e))?;
     let resolved = RuntimeDetector::resolve(kind).unwrap_or(RuntimeKind::Docker);
     let runtime = RuntimeDetector::build(resolved, &cli.data_dir).await?;
-    info!(runtime = runtime.runtime_name(), "container runtime initialized");
+    info!(
+        runtime = runtime.runtime_name(),
+        "container runtime initialized"
+    );
 
     Ok((data_dir, store, runtime))
 }
@@ -168,14 +174,10 @@ fn init_proxy(
         )),
         "caddy" => {
             let caddyfile = PathBuf::from(&cli.proxy_config_dir).join("Caddyfile");
-            Arc::new(CaddyBackend::new(
-                caddyfile,
-                "http://localhost:2019".into(),
-            ))
+            Arc::new(CaddyBackend::new(caddyfile, "http://localhost:2019".into()))
         }
         "traefik" => {
-            let config_path =
-                PathBuf::from(&cli.proxy_config_dir).join("nexa-dynamic.yml");
+            let config_path = PathBuf::from(&cli.proxy_config_dir).join("nexa-dynamic.yml");
             Arc::new(TraefikBackend::new(config_path))
         }
         _ => {
@@ -206,8 +208,9 @@ fn spawn_orchestrator(
     proxy: Option<Arc<dyn nexa_core::ports::proxy::ProxyBackend>>,
     route_store: Option<Arc<dyn nexa_core::ports::route_store::RouteStore>>,
 ) -> nexa_core::domain::orchestrator::OrchestratorHandle {
-    let transport: Arc<dyn ClusterTransport> =
-        Arc::new(nexad::adapters::transport::LocalTransport::new(Arc::clone(runtime)));
+    let transport: Arc<dyn ClusterTransport> = Arc::new(
+        nexad::adapters::transport::LocalTransport::new(Arc::clone(runtime)),
+    );
     let handle = Orchestrator::spawn(
         Arc::clone(runtime),
         Some(Arc::clone(store)),
@@ -238,12 +241,17 @@ fn spawn_orchestrator(
 async fn init_dns(cli: &Cli) -> anyhow::Result<(Option<Arc<dyn DnsProvider>>, Option<String>)> {
     match cli.dns_mode.as_str() {
         "embedded" => {
-            let listen_addr: std::net::SocketAddr = cli.dns_listen.parse()
+            let listen_addr: std::net::SocketAddr = cli
+                .dns_listen
+                .parse()
                 .map_err(|e| anyhow::anyhow!("invalid --dns-listen address: {e}"))?;
-            let upstream_addr: std::net::SocketAddr = cli.dns_upstream.parse()
+            let upstream_addr: std::net::SocketAddr = cli
+                .dns_upstream
+                .parse()
                 .map_err(|e| anyhow::anyhow!("invalid --dns-upstream address: {e}"))?;
 
-            let provider = nexad::adapters::dns::HickoryDnsProvider::new(listen_addr, upstream_addr);
+            let provider =
+                nexad::adapters::dns::HickoryDnsProvider::new(listen_addr, upstream_addr);
             provider.start().await?;
             info!(listen = %cli.dns_listen, upstream = %cli.dns_upstream, "embedded DNS server started");
 
@@ -260,7 +268,10 @@ async fn init_dns(cli: &Cli) -> anyhow::Result<(Option<Arc<dyn DnsProvider>>, Op
 // ────────────────────── single-node mode ──────────────────────
 
 async fn start_single_node(cli: &Cli) -> anyhow::Result<()> {
-    info!("starting nexad in single-node mode on {}:{}", cli.host, cli.port);
+    info!(
+        "starting nexad in single-node mode on {}:{}",
+        cli.host, cli.port
+    );
 
     let (data_dir, store, runtime) = init_infrastructure(cli).await?;
     let secret_store = init_secrets(cli, &data_dir)?;
@@ -356,11 +367,12 @@ async fn start_master(cli: &Cli) -> anyhow::Result<()> {
         None => {
             let token = nexad::cluster::token::generate_token();
             let hash = nexad::cluster::token::hash_token(&token);
-            store
-                .set_cluster_config("join_token_hash", &hash)
-                .await?;
+            store.set_cluster_config("join_token_hash", &hash).await?;
             info!("join token generated — workers can join with:");
-            info!("  nexad --mode worker --join {}:{} --token {}", cli.host, cli.grpc_port, token);
+            info!(
+                "  nexad --mode worker --join {}:{} --token {}",
+                cli.host, cli.grpc_port, token
+            );
             hash
         }
     };
@@ -371,9 +383,13 @@ async fn start_master(cli: &Cli) -> anyhow::Result<()> {
     let grpc_state = Arc::clone(&store);
     let grpc_token_hash = token_hash.clone();
     tokio::spawn(async move {
-        if let Err(e) =
-            nexad::cluster::server::start_grpc_server(&grpc_addr, grpc_runtime, grpc_state, grpc_token_hash)
-                .await
+        if let Err(e) = nexad::cluster::server::start_grpc_server(
+            &grpc_addr,
+            grpc_runtime,
+            grpc_state,
+            grpc_token_hash,
+        )
+        .await
         {
             tracing::error!(error = %e, "gRPC cluster server failed");
         }
@@ -381,14 +397,13 @@ async fn start_master(cli: &Cli) -> anyhow::Result<()> {
 
     // Start heartbeat monitor as background task.
     let hb_state = Arc::clone(&store);
-    let reschedule: nexad::cluster::heartbeat::RescheduleFn =
-        Arc::new(move |node_id, pods| {
-            tracing::warn!(
-                node_id = %node_id,
-                pod_count = pods.len(),
-                "dead node — pods need rescheduling (TODO: implement scheduler)"
-            );
-        });
+    let reschedule: nexad::cluster::heartbeat::RescheduleFn = Arc::new(move |node_id, pods| {
+        tracing::warn!(
+            node_id = %node_id,
+            pod_count = pods.len(),
+            "dead node — pods need rescheduling (TODO: implement scheduler)"
+        );
+    });
     tokio::spawn(async move {
         nexad::cluster::heartbeat::run_monitor(hb_state, reschedule).await;
     });
@@ -428,10 +443,16 @@ async fn start_worker(cli: &Cli) -> anyhow::Result<()> {
     info!(path = db_path, "worker state store initialized");
 
     use nexad::adapters::runtime::{RuntimeDetector, RuntimeKind};
-    let kind: RuntimeKind = cli.runtime.parse().map_err(|e: String| anyhow::anyhow!(e))?;
+    let kind: RuntimeKind = cli
+        .runtime
+        .parse()
+        .map_err(|e: String| anyhow::anyhow!(e))?;
     let resolved = RuntimeDetector::resolve(kind).unwrap_or(RuntimeKind::Docker);
     let runtime = RuntimeDetector::build(resolved, &cli.data_dir).await?;
-    info!(runtime = runtime.runtime_name(), "worker container runtime initialized");
+    info!(
+        runtime = runtime.runtime_name(),
+        "worker container runtime initialized"
+    );
 
     let listen_addr = format!("{}:{}", cli.host, cli.grpc_port);
 

@@ -2,8 +2,8 @@ use std::sync::Arc;
 
 use tracing::info;
 
-use nexa_core::error::{NexaError, Result};
 use nexa_core::domain::models::Certificate;
+use nexa_core::error::{NexaError, Result};
 use nexa_core::ports::route_store::RouteStore;
 
 pub struct AcmeManager {
@@ -22,7 +22,12 @@ impl AcmeManager {
     }
 
     pub async fn issue_certificate(&self, domain: &str) -> Result<Certificate> {
-        info!(domain, email = self.email, staging = self.staging, "initiating ACME certificate issuance");
+        info!(
+            domain,
+            email = self.email,
+            staging = self.staging,
+            "initiating ACME certificate issuance"
+        );
         Err(NexaError::Certificate(format!(
             "ACME issuance for '{domain}' requires network access and HTTP challenge validation"
         )))
@@ -91,7 +96,11 @@ mod tests {
         .await
         .unwrap();
 
-        let cert = store.get_certificate("api.example.com").await.unwrap().unwrap();
+        let cert = store
+            .get_certificate("api.example.com")
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!(cert.cert_pem, b"CERT PEM DATA");
         assert_eq!(cert.key_pem_enc, b"KEY PEM DATA");
     }

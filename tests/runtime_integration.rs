@@ -167,9 +167,7 @@ async fn test_container_exists() {
         .expect("container_exists failed");
     assert!(exists, "container should exist after creation");
 
-    rt.remove_container(&id, true)
-        .await
-        .expect("remove failed");
+    rt.remove_container(&id, true).await.expect("remove failed");
 
     let exists = rt
         .container_exists(&name)
@@ -214,9 +212,7 @@ async fn test_inspect_container() {
         info.image
     );
 
-    rt.remove_container(&id, true)
-        .await
-        .expect("remove failed");
+    rt.remove_container(&id, true).await.expect("remove failed");
 }
 
 #[tokio::test]
