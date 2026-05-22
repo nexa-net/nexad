@@ -58,6 +58,30 @@ struct Cli {
     /// Upstream DNS server for forwarding non-.internal queries
     #[arg(long, default_value = "8.8.8.8:53")]
     dns_upstream: String,
+
+    /// Proxy backend: "nexa-proxy", "nginx", "caddy", "traefik"
+    #[arg(long, default_value = "nexa-proxy")]
+    proxy_backend: String,
+
+    /// Proxy config directory
+    #[arg(long, default_value = "/var/lib/nexa/proxy")]
+    proxy_config_dir: String,
+
+    /// ACME email for automatic TLS
+    #[arg(long)]
+    acme_email: Option<String>,
+
+    /// Cluster CIDR for overlay network
+    #[arg(long, default_value = "172.20.0.0/16")]
+    cluster_cidr: String,
+
+    /// WireGuard listen port
+    #[arg(long, default_value = "51820")]
+    wg_port: u16,
+
+    /// Enable overlay network
+    #[arg(long)]
+    overlay: bool,
 }
 
 #[tokio::main]
@@ -119,6 +143,53 @@ fn init_secrets(cli: &Cli, data_dir: &PathBuf) -> anyhow::Result<Arc<dyn SecretS
     Ok(secret_store)
 }
 
+/// Initialise the proxy backend and in-memory route store.
+fn init_proxy(
+    cli: &Cli,
+) -> anyhow::Result<(
+    Arc<dyn nexa_core::ports::proxy::ProxyBackend>,
+    Arc<dyn nexa_core::ports::route_store::RouteStore>,
+)> {
+    use nexad::adapters::proxy::{CaddyBackend, NexaProxyBackend, NginxBackend, TraefikBackend};
+    use nexad::adapters::state::memory_route_store::InMemoryRouteStore;
+
+    std::fs::create_dir_all(&cli.proxy_config_dir)?;
+
+    let proxy: Arc<dyn nexa_core::ports::proxy::ProxyBackend> = match cli.proxy_backend.as_str() {
+        "nginx" => Arc::new(NginxBackend::new(
+            PathBuf::from(&cli.proxy_config_dir),
+            "nginx".into(),
+        )),
+        "caddy" => {
+            let caddyfile = PathBuf::from(&cli.proxy_config_dir).join("Caddyfile");
+            Arc::new(CaddyBackend::new(
+                caddyfile,
+                "http://localhost:2019".into(),
+            ))
+        }
+        "traefik" => {
+            let config_path =
+                PathBuf::from(&cli.proxy_config_dir).join("nexa-dynamic.yml");
+            Arc::new(TraefikBackend::new(config_path))
+        }
+        _ => {
+            let config_path = PathBuf::from(&cli.proxy_config_dir).join("proxy.json");
+            Arc::new(NexaProxyBackend::new(
+                config_path,
+                "nexa-proxy",
+                "0.0.0.0:80",
+                Some("0.0.0.0:443".into()),
+            ))
+        }
+    };
+
+    let route_store: Arc<dyn nexa_core::ports::route_store::RouteStore> =
+        Arc::new(InMemoryRouteStore::new());
+
+    info!(backend = %cli.proxy_backend, "proxy backend initialized");
+    Ok((proxy, route_store))
+}
+
 /// Spawn the orchestrator together with its health checker and event watcher.
 fn spawn_orchestrator(
     runtime: &Arc<dyn ContainerRuntime>,
@@ -126,6 +197,8 @@ fn spawn_orchestrator(
     secret_store: Arc<dyn SecretStore>,
     dns: Option<Arc<dyn DnsProvider>>,
     master_ip: Option<String>,
+    proxy: Option<Arc<dyn nexa_core::ports::proxy::ProxyBackend>>,
+    route_store: Option<Arc<dyn nexa_core::ports::route_store::RouteStore>>,
 ) -> nexa_core::domain::orchestrator::OrchestratorHandle {
     let transport: Arc<dyn ClusterTransport> =
         Arc::new(nexad::adapters::transport::LocalTransport::new(Arc::clone(runtime)));
@@ -136,8 +209,8 @@ fn spawn_orchestrator(
         Some(transport),
         dns,
         master_ip,
-        None,  // proxy
-        None,  // route_store
+        proxy,
+        route_store,
     );
 
     // Spawn health checker background task
@@ -186,7 +259,31 @@ async fn start_single_node(cli: &Cli) -> anyhow::Result<()> {
     let (data_dir, store, runtime) = init_infrastructure(cli).await?;
     let secret_store = init_secrets(cli, &data_dir)?;
     let (dns, master_ip) = init_dns(cli).await?;
-    let handle = spawn_orchestrator(&runtime, &store, secret_store, dns, master_ip);
+    let (proxy, route_store) = init_proxy(cli)?;
+    let handle = spawn_orchestrator(
+        &runtime,
+        &store,
+        secret_store,
+        dns,
+        master_ip,
+        Some(Arc::clone(&proxy)),
+        Some(Arc::clone(&route_store)),
+    );
+
+    if let Some(ref email) = cli.acme_email {
+        let acme = Arc::new(nexad::adapters::tls::AcmeManager::new(
+            email,
+            Arc::clone(&route_store),
+            false,
+        ));
+        nexad::adapters::tls::spawn_renewal_task(
+            Arc::clone(&route_store),
+            acme,
+            std::time::Duration::from_secs(86400),
+            30,
+        );
+        info!(email, "TLS auto-renewal enabled");
+    }
 
     let addr = format!("{}:{}", cli.host, cli.port);
     api::serve(handle, Arc::clone(&store), &addr).await
@@ -203,7 +300,31 @@ async fn start_master(cli: &Cli) -> anyhow::Result<()> {
     let (data_dir, store, runtime) = init_infrastructure(cli).await?;
     let secret_store = init_secrets(cli, &data_dir)?;
     let (dns, master_ip) = init_dns(cli).await?;
-    let handle = spawn_orchestrator(&runtime, &store, secret_store, dns, master_ip);
+    let (proxy, route_store) = init_proxy(cli)?;
+    let handle = spawn_orchestrator(
+        &runtime,
+        &store,
+        secret_store,
+        dns,
+        master_ip,
+        Some(Arc::clone(&proxy)),
+        Some(Arc::clone(&route_store)),
+    );
+
+    if let Some(ref email) = cli.acme_email {
+        let acme = Arc::new(nexad::adapters::tls::AcmeManager::new(
+            email,
+            Arc::clone(&route_store),
+            false,
+        ));
+        nexad::adapters::tls::spawn_renewal_task(
+            Arc::clone(&route_store),
+            acme,
+            std::time::Duration::from_secs(86400),
+            30,
+        );
+        info!(email, "TLS auto-renewal enabled");
+    }
 
     // Register self as a master node.
     let hostname = hostname::get()
