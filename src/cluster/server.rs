@@ -222,6 +222,8 @@ impl ClusterService for ClusterServer {
             volumes,
             labels,
             network: Some(network_name),
+            dns: vec![],
+            dns_search: vec![],
         };
 
         match self.runtime.create_container(&config).await {

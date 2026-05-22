@@ -102,6 +102,8 @@ impl ClusterTransport for LocalTransport {
             volumes,
             labels,
             network: Some(network_name),
+            dns: vec![],
+            dns_search: vec![],
         };
 
         let container_id = self.runtime.create_container(&config).await?;

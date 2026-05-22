@@ -87,6 +87,8 @@ impl ContainerRuntime for DockerRuntime {
             port_bindings: Some(port_bindings),
             binds: Some(binds),
             network_mode: config.network.clone(),
+            dns: if config.dns.is_empty() { None } else { Some(config.dns.clone()) },
+            dns_search: if config.dns_search.is_empty() { None } else { Some(config.dns_search.clone()) },
             ..Default::default()
         };
         let container_config = Config {
