@@ -82,6 +82,10 @@ struct Cli {
     /// Enable overlay network
     #[arg(long)]
     overlay: bool,
+
+    /// Container runtime to use: docker, containerd, or auto
+    #[arg(long, default_value = "auto")]
+    runtime: String,
 }
 
 #[tokio::main]
@@ -104,11 +108,13 @@ async fn main() -> anyhow::Result<()> {
 
 // ────────────────────── shared helpers ──────────────────────
 
-/// Initialise the data directory, SQLite state store, and Docker runtime.
+/// Initialise the data directory, SQLite state store, and container runtime.
 /// Returns (data_dir, state, runtime).
 async fn init_infrastructure(
     cli: &Cli,
 ) -> anyhow::Result<(PathBuf, Arc<dyn StateStore>, Arc<dyn ContainerRuntime>)> {
+    use nexad::adapters::runtime::{RuntimeDetector, RuntimeKind};
+
     std::fs::create_dir_all(&cli.data_dir)?;
 
     let data_dir = PathBuf::from(&cli.data_dir);
@@ -119,11 +125,11 @@ async fn init_infrastructure(
     let store: Arc<dyn StateStore> = Arc::new(store);
     info!(path = db_path, "state store initialized");
 
-    let runtime = nexad::adapters::runtime::DockerRuntime::new()?;
-    runtime.ping().await?;
-    info!("connected to Docker runtime");
+    let kind: RuntimeKind = cli.runtime.parse().map_err(|e: String| anyhow::anyhow!(e))?;
+    let resolved = RuntimeDetector::resolve(kind).unwrap_or(RuntimeKind::Docker);
+    let runtime = RuntimeDetector::build(resolved, &cli.data_dir).await?;
+    info!(runtime = %resolved, "connected to container runtime");
 
-    let runtime: Arc<dyn ContainerRuntime> = Arc::new(runtime);
     Ok((data_dir, store, runtime))
 }
 
