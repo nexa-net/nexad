@@ -67,6 +67,8 @@ pub fn build(state: AppState) -> Router {
             post(handlers::drain_node),
         )
         .route("/api/v1/nodes/{name}", delete(handlers::remove_node))
+        .route("/api/v1/cluster/scheduler", get(handlers::get_scheduler_config))
+        .route("/api/v1/cluster/scheduler", post(handlers::set_scheduler_config))
         .layer(TraceLayer::new_for_http())
         .with_state(state)
 }

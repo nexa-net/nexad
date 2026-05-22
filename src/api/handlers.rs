@@ -7,6 +7,7 @@ use futures::StreamExt;
 use serde::Deserialize;
 
 use nexa_core::config::parse_deployment;
+use nexa_core::domain::scheduler::SchedulerConfig;
 use nexa_core::error::NexaError;
 
 use super::AppState as SharedState;
@@ -383,6 +384,73 @@ pub async fn remove_node(
             Json(serde_json::json!({ "error": format!("node '{}' not found", name) })),
         )
             .into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": e.to_string() })),
+        )
+            .into_response(),
+    }
+}
+
+// ---- Scheduler config handlers ----
+
+pub async fn get_scheduler_config(State(state): AppStateExtractor) -> impl IntoResponse {
+    Json(serde_json::json!(state.handle.get_scheduler_config().await))
+}
+
+#[derive(Deserialize)]
+pub struct SetSchedulerRequest {
+    #[serde(default)]
+    pub strategy: Option<String>,
+    #[serde(default)]
+    pub weights: Option<SetWeightRequest>,
+}
+
+#[derive(Deserialize)]
+pub struct SetWeightRequest {
+    pub name: String,
+    pub value: f64,
+}
+
+pub async fn set_scheduler_config(
+    State(state): AppStateExtractor,
+    Json(req): Json<SetSchedulerRequest>,
+) -> impl IntoResponse {
+    let current = state.handle.get_scheduler_config().await;
+
+    let config = if let Some(strategy) = req.strategy {
+        match SchedulerConfig::from_strategy(&strategy) {
+            Ok(c) => c,
+            Err(e) => {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(serde_json::json!({ "error": e.to_string() })),
+                )
+                    .into_response();
+            }
+        }
+    } else if let Some(weight) = req.weights {
+        let mut config = current;
+        match config.set_weight(&weight.name, weight.value) {
+            Ok(()) => config,
+            Err(e) => {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(serde_json::json!({ "error": e.to_string() })),
+                )
+                    .into_response();
+            }
+        }
+    } else {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({ "error": "provide 'strategy' or 'weights'" })),
+        )
+            .into_response();
+    };
+
+    match state.handle.set_scheduler_config(config).await {
+        Ok(config) => Json(serde_json::json!(config)).into_response(),
         Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(serde_json::json!({ "error": e.to_string() })),
