@@ -365,4 +365,62 @@ mod tests {
         let rcode = flags & 0x000F;
         assert_eq!(rcode, 3);
     }
+
+    #[test]
+    fn non_internal_query_not_resolved_locally() {
+        let store = DnsRecordStore::new();
+        store.register("ecommerce", "api", ip4(10, 0, 0, 1));
+        assert!(store.resolve("google.com").is_none());
+        assert!(store.resolve("api.ecommerce.com").is_none());
+        assert!(store.resolve("www.example.org").is_none());
+    }
+
+    #[test]
+    fn handle_dns_query_identifies_internal_vs_external() {
+        let internal_query = build_test_dns_query("api.ecommerce.internal");
+        let external_query = build_test_dns_query("www.google.com");
+
+        let store = DnsRecordStore::new();
+        store.register("ecommerce", "api", ip4(10, 0, 0, 1));
+
+        let (name, _, _) = parse_question(&internal_query, 12).unwrap();
+        assert!(name.ends_with(".internal"));
+
+        let (name, _, _) = parse_question(&external_query, 12).unwrap();
+        assert!(!name.ends_with(".internal"));
+    }
+
+    fn build_test_dns_query(domain: &str) -> Vec<u8> {
+        let mut data = vec![
+            0x00, 0x01, 0x01, 0x00,
+            0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        ];
+        for label in domain.split('.') {
+            data.push(label.len() as u8);
+            data.extend_from_slice(label.as_bytes());
+        }
+        data.push(0);
+        data.extend_from_slice(&[0x00, 0x01]);
+        data.extend_from_slice(&[0x00, 0x01]);
+        data
+    }
+
+    #[tokio::test]
+    #[ignore] // Requires network access to 8.8.8.8
+    async fn forward_to_upstream_resolves_external_domain() {
+        let upstream: SocketAddr = "8.8.8.8:53".parse().unwrap();
+        let query = build_test_dns_query("www.google.com");
+
+        let response = forward_to_upstream(&query, upstream).await;
+        assert!(response.is_some(), "upstream should return a response");
+
+        let resp = response.unwrap();
+        assert!(resp.len() > 12, "response should have header + answers");
+
+        let flags = u16::from_be_bytes([resp[2], resp[3]]);
+        assert!(flags & 0x8000 != 0, "should be a response");
+
+        let rcode = flags & 0x000F;
+        assert_eq!(rcode, 0, "should be NOERROR");
+    }
 }
