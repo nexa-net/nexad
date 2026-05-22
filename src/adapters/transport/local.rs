@@ -156,6 +156,9 @@ mod tests {
 
     #[async_trait]
     impl ContainerRuntime for MockRuntime {
+        fn runtime_name(&self) -> &'static str {
+            "mock"
+        }
         async fn pull_image(&self, _image: &str) -> Result<()> {
             Ok(())
         }

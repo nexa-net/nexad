@@ -37,6 +37,10 @@ impl DockerRuntime {
 
 #[async_trait]
 impl ContainerRuntime for DockerRuntime {
+    fn runtime_name(&self) -> &'static str {
+        "docker"
+    }
+
     async fn pull_image(&self, image: &str) -> Result<()> {
         info!(image, "pulling image");
         let (repo, tag) = match image.rsplit_once(':') {
