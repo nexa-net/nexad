@@ -268,8 +268,8 @@ pub async fn delete_secret(
 // ---- Cluster management handlers ----
 
 pub async fn cluster_init(State(state): AppStateExtractor) -> impl IntoResponse {
-    let token = nexad::cluster::token::generate_token();
-    let hash = nexad::cluster::token::hash_token(&token);
+    let token = crate::cluster::token::generate_token();
+    let hash = crate::cluster::token::hash_token(&token);
     match state
         .store
         .set_cluster_config("join_token_hash", &hash)
@@ -304,8 +304,8 @@ pub async fn cluster_token_show(State(state): AppStateExtractor) -> impl IntoRes
 }
 
 pub async fn cluster_token_rotate(State(state): AppStateExtractor) -> impl IntoResponse {
-    let token = nexad::cluster::token::generate_token();
-    let hash = nexad::cluster::token::hash_token(&token);
+    let token = crate::cluster::token::generate_token();
+    let hash = crate::cluster::token::hash_token(&token);
     match state
         .store
         .set_cluster_config("join_token_hash", &hash)
