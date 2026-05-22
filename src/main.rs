@@ -128,7 +128,7 @@ async fn init_infrastructure(
     let kind: RuntimeKind = cli.runtime.parse().map_err(|e: String| anyhow::anyhow!(e))?;
     let resolved = RuntimeDetector::resolve(kind).unwrap_or(RuntimeKind::Docker);
     let runtime = RuntimeDetector::build(resolved, &cli.data_dir).await?;
-    info!(runtime = %resolved, "connected to container runtime");
+    info!(runtime = runtime.runtime_name(), "container runtime initialized");
 
     Ok((data_dir, store, runtime))
 }
