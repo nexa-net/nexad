@@ -4,6 +4,8 @@ use std::sync::Arc;
 
 use nexa_core::ports::runtime::ContainerRuntime;
 
+use tracing::info;
+
 use super::DockerRuntime;
 
 /// Which container runtime to use.
@@ -71,19 +73,22 @@ impl RuntimeDetector {
     }
 
     /// Build a runtime instance for the given kind.
-    /// Currently only Docker is implemented; containerd returns an error.
     pub async fn build(
         kind: RuntimeKind,
-        _data_dir: &str,
+        data_dir: &str,
     ) -> anyhow::Result<Arc<dyn ContainerRuntime>> {
         match kind {
             RuntimeKind::Docker => {
                 let rt = DockerRuntime::new()?;
                 rt.ping().await?;
+                info!("connected to Docker runtime");
                 Ok(Arc::new(rt))
             }
             RuntimeKind::Containerd => {
-                anyhow::bail!("containerd runtime is not yet implemented")
+                let rt = super::ContainerdRuntime::new(data_dir)?;
+                rt.ping().await?;
+                info!("connected to containerd runtime");
+                Ok(Arc::new(rt))
             }
             RuntimeKind::Auto => {
                 anyhow::bail!("RuntimeKind::Auto must be resolved before building")
