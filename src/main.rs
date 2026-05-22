@@ -115,6 +115,8 @@ fn spawn_orchestrator(
         Some(Arc::clone(store)),
         Some(secret_store),
         Some(transport),
+        None,
+        None,
     );
 
     // Spawn health checker background task
