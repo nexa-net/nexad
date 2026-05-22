@@ -59,7 +59,10 @@ fn bench_decrypt(c: &mut Criterion) {
                     let store = make_store();
 
                     // Pre-populate one secret to read back
-                    store.set("bench-project", "bench-key", &payload).await.unwrap();
+                    store
+                        .set("bench-project", "bench-key", &payload)
+                        .await
+                        .unwrap();
 
                     let start = Instant::now();
                     for _ in 0..iters {

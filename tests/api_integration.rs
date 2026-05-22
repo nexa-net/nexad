@@ -13,7 +13,7 @@ use rusqlite::Connection;
 use nexad::adapters::secrets::EncryptedSqliteSecretStore;
 use nexad::adapters::state::{InMemoryRouteStore, SqliteStore};
 use nexad::adapters::transport::LocalTransport;
-use nexad::api::{routes, AppState};
+use nexad::api::{AppState, routes};
 
 // ---------------------------------------------------------------------------
 // MockRuntime
@@ -31,10 +31,7 @@ impl ContainerRuntime for MockRuntime {
         Ok(())
     }
 
-    async fn create_container(
-        &self,
-        config: &ContainerConfig,
-    ) -> nexa_core::error::Result<String> {
+    async fn create_container(&self, config: &ContainerConfig) -> nexa_core::error::Result<String> {
         Ok(format!("mock-{}", config.name))
     }
 
@@ -122,14 +119,12 @@ impl TestServer {
         let secret_conn = Connection::open_in_memory().expect("failed to open secret db");
         let secret_store = EncryptedSqliteSecretStore::new(secret_conn, &[0u8; 32])
             .expect("failed to create secret store");
-        let secret_store: Arc<dyn nexa_core::ports::secrets::SecretStore> =
-            Arc::new(secret_store);
+        let secret_store: Arc<dyn nexa_core::ports::secrets::SecretStore> = Arc::new(secret_store);
 
         // Runtime + transport
         let runtime: Arc<dyn ContainerRuntime> = Arc::new(MockRuntime);
         let transport = LocalTransport::new(runtime.clone());
-        let transport: Arc<dyn nexa_core::ports::cluster::ClusterTransport> =
-            Arc::new(transport);
+        let transport: Arc<dyn nexa_core::ports::cluster::ClusterTransport> = Arc::new(transport);
 
         // Route store
         let route_store: Arc<dyn nexa_core::ports::route_store::RouteStore> =
@@ -223,7 +218,12 @@ async fn create_and_list_projects() {
         .send()
         .await
         .expect("request failed");
-    assert_eq!(resp.status(), 201, "create project failed: {}", resp.status());
+    assert_eq!(
+        resp.status(),
+        201,
+        "create project failed: {}",
+        resp.status()
+    );
 
     // List projects
     let resp = c
@@ -353,7 +353,12 @@ async fn deploy_and_list_pods() {
     assert_eq!(resp.status(), 200);
     let deployments: serde_json::Value = resp.json().await.expect("invalid JSON");
     let dep_arr = deployments.as_array().expect("expected array");
-    assert_eq!(dep_arr.len(), 1, "expected 1 deployment, got {}", dep_arr.len());
+    assert_eq!(
+        dep_arr.len(),
+        1,
+        "expected 1 deployment, got {}",
+        dep_arr.len()
+    );
 
     // List pods
     let resp = c
@@ -514,7 +519,12 @@ async fn secrets_crud() {
         .send()
         .await
         .expect("request failed");
-    assert_eq!(resp.status(), 200, "delete secret failed: {}", resp.status());
+    assert_eq!(
+        resp.status(),
+        200,
+        "delete secret failed: {}",
+        resp.status()
+    );
 
     // Verify gone
     let resp = c

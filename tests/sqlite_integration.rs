@@ -212,7 +212,9 @@ async fn concurrent_pod_inserts() {
 
     let spec = DeploymentSpec {
         project: "concurrent-proj".into(),
-        deployment: DeploymentMeta { name: "worker".into() },
+        deployment: DeploymentMeta {
+            name: "worker".into(),
+        },
         replicas: 20,
         image: "busybox:latest".into(),
         ports: vec![],
@@ -233,7 +235,13 @@ async fn concurrent_pod_inserts() {
     for i in 0..20u32 {
         let store_clone = Arc::clone(&store);
         let handle = tokio::spawn(async move {
-            let pod = Pod::new(deployment_id, "concurrent-proj", "worker", i, "busybox:latest");
+            let pod = Pod::new(
+                deployment_id,
+                "concurrent-proj",
+                "worker",
+                i,
+                "busybox:latest",
+            );
             store_clone.insert_pod(&pod).await.unwrap();
         });
         handles.push(handle);
@@ -246,5 +254,9 @@ async fn concurrent_pod_inserts() {
 
     // Verify all 20 pods are in the database
     let pods = store.pods_by_deployment(&deployment_id).await.unwrap();
-    assert_eq!(pods.len(), 20, "all 20 concurrently inserted pods should be present");
+    assert_eq!(
+        pods.len(),
+        20,
+        "all 20 concurrently inserted pods should be present"
+    );
 }

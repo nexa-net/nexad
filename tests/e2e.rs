@@ -10,7 +10,7 @@ use nexad::adapters::runtime::DockerRuntime;
 use nexad::adapters::secrets::EncryptedSqliteSecretStore;
 use nexad::adapters::state::{InMemoryRouteStore, SqliteStore};
 use nexad::adapters::transport::LocalTransport;
-use nexad::api::{routes, AppState};
+use nexad::api::{AppState, routes};
 
 // ---------------------------------------------------------------------------
 // E2eServer
@@ -37,8 +37,7 @@ impl E2eServer {
         let secret_conn = Connection::open_in_memory().expect("failed to open secret db");
         let secret_store = EncryptedSqliteSecretStore::new(secret_conn, &[0u8; 32])
             .expect("failed to create secret store");
-        let secret_store: Arc<dyn nexa_core::ports::secrets::SecretStore> =
-            Arc::new(secret_store);
+        let secret_store: Arc<dyn nexa_core::ports::secrets::SecretStore> = Arc::new(secret_store);
 
         // Real Docker runtime
         let docker_runtime =
@@ -47,8 +46,7 @@ impl E2eServer {
 
         // Transport
         let transport = LocalTransport::new(runtime.clone());
-        let transport: Arc<dyn nexa_core::ports::cluster::ClusterTransport> =
-            Arc::new(transport);
+        let transport: Arc<dyn nexa_core::ports::cluster::ClusterTransport> = Arc::new(transport);
 
         // Route store
         let route_store: Arc<dyn nexa_core::ports::route_store::RouteStore> =
@@ -135,7 +133,14 @@ fn deploy_body_busybox(project: &str, name: &str, replicas: u32) -> serde_json::
 
 async fn cleanup_containers() {
     let output = tokio::process::Command::new("docker")
-        .args(["ps", "-a", "--filter", "name=nexa-e2e-", "--format", "{{.Names}}"])
+        .args([
+            "ps",
+            "-a",
+            "--filter",
+            "name=nexa-e2e-",
+            "--format",
+            "{{.Names}}",
+        ])
         .output()
         .await;
     if let Ok(output) = output {
@@ -169,7 +174,12 @@ async fn e2e_deploy_lifecycle() {
         .send()
         .await
         .expect("create project request failed");
-    assert_eq!(resp.status(), 201, "create project failed: {}", resp.status());
+    assert_eq!(
+        resp.status(),
+        201,
+        "create project failed: {}",
+        resp.status()
+    );
 
     // Deploy busybox with 1 replica
     let body = serde_json::to_string(&deploy_body_busybox(&project, "sleeper", 1)).unwrap();
@@ -210,7 +220,9 @@ async fn e2e_deploy_lifecycle() {
 
     // Stop deployment
     let resp = c
-        .post(server.url(&format!("/api/v1/projects/{project}/deployments/sleeper/stop")))
+        .post(server.url(&format!(
+            "/api/v1/projects/{project}/deployments/sleeper/stop"
+        )))
         .send()
         .await
         .expect("stop request failed");
@@ -222,7 +234,12 @@ async fn e2e_deploy_lifecycle() {
         .send()
         .await
         .expect("remove deployment request failed");
-    assert_eq!(resp.status(), 200, "remove deployment failed: {}", resp.status());
+    assert_eq!(
+        resp.status(),
+        200,
+        "remove deployment failed: {}",
+        resp.status()
+    );
 
     // Delete project
     let resp = c
@@ -230,7 +247,12 @@ async fn e2e_deploy_lifecycle() {
         .send()
         .await
         .expect("delete project request failed");
-    assert_eq!(resp.status(), 200, "delete project failed: {}", resp.status());
+    assert_eq!(
+        resp.status(),
+        200,
+        "delete project failed: {}",
+        resp.status()
+    );
 
     cleanup_containers().await;
 }
@@ -264,7 +286,9 @@ async fn e2e_scale_up_down() {
 
     // Scale up to 3
     let resp = c
-        .post(server.url(&format!("/api/v1/projects/{project}/deployments/scaler/scale")))
+        .post(server.url(&format!(
+            "/api/v1/projects/{project}/deployments/scaler/scale"
+        )))
         .json(&serde_json::json!({ "replicas": 3 }))
         .send()
         .await
@@ -297,7 +321,9 @@ async fn e2e_scale_up_down() {
 
     // Scale down to 1
     let resp = c
-        .post(server.url(&format!("/api/v1/projects/{project}/deployments/scaler/scale")))
+        .post(server.url(&format!(
+            "/api/v1/projects/{project}/deployments/scaler/scale"
+        )))
         .json(&serde_json::json!({ "replicas": 1 }))
         .send()
         .await
@@ -330,7 +356,9 @@ async fn e2e_scale_up_down() {
 
     // Cleanup
     let _ = c
-        .post(server.url(&format!("/api/v1/projects/{project}/deployments/scaler/stop")))
+        .post(server.url(&format!(
+            "/api/v1/projects/{project}/deployments/scaler/stop"
+        )))
         .send()
         .await;
     let _ = c
