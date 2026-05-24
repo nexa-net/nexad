@@ -46,7 +46,10 @@ impl PrometheusMetrics {
         .unwrap();
 
         let container_events_total = IntCounterVec::new(
-            Opts::new("nexa_container_events_total", "Total container lifecycle events"),
+            Opts::new(
+                "nexa_container_events_total",
+                "Total container lifecycle events",
+            ),
             &["event"],
         )
         .unwrap();
@@ -93,17 +96,35 @@ impl PrometheusMetrics {
         )
         .unwrap();
 
-        registry.register(Box::new(http_requests_total.clone())).unwrap();
-        registry.register(Box::new(http_request_duration.clone())).unwrap();
-        registry.register(Box::new(container_events_total.clone())).unwrap();
-        registry.register(Box::new(schedule_duration.clone())).unwrap();
-        registry.register(Box::new(deployment_ops_total.clone())).unwrap();
+        registry
+            .register(Box::new(http_requests_total.clone()))
+            .unwrap();
+        registry
+            .register(Box::new(http_request_duration.clone()))
+            .unwrap();
+        registry
+            .register(Box::new(container_events_total.clone()))
+            .unwrap();
+        registry
+            .register(Box::new(schedule_duration.clone()))
+            .unwrap();
+        registry
+            .register(Box::new(deployment_ops_total.clone()))
+            .unwrap();
         registry.register(Box::new(nodes_total.clone())).unwrap();
         registry.register(Box::new(pods_total.clone())).unwrap();
-        registry.register(Box::new(deployments_total.clone())).unwrap();
-        registry.register(Box::new(proxy_requests_total.clone())).unwrap();
-        registry.register(Box::new(proxy_request_duration.clone())).unwrap();
-        registry.register(Box::new(proxy_errors_total.clone())).unwrap();
+        registry
+            .register(Box::new(deployments_total.clone()))
+            .unwrap();
+        registry
+            .register(Box::new(proxy_requests_total.clone()))
+            .unwrap();
+        registry
+            .register(Box::new(proxy_request_duration.clone()))
+            .unwrap();
+        registry
+            .register(Box::new(proxy_errors_total.clone()))
+            .unwrap();
 
         Self {
             registry,
@@ -141,7 +162,9 @@ impl MetricsPort for PrometheusMetrics {
     }
 
     fn record_container_event(&self, event: &str) {
-        self.container_events_total.with_label_values(&[event]).inc();
+        self.container_events_total
+            .with_label_values(&[event])
+            .inc();
     }
 
     fn record_schedule_decision(&self, strategy: &str, duration_secs: f64) {

@@ -1,8 +1,8 @@
 use axum::Json;
 use axum::extract::{Path, Query, State};
+use axum::http::Request as AxumRequest;
 use axum::http::StatusCode;
 use axum::middleware::Next;
-use axum::http::Request as AxumRequest;
 use axum::response::IntoResponse;
 use axum::response::sse::{Event, Sse};
 use futures::StreamExt;
@@ -615,6 +615,8 @@ pub async fn metrics_middleware(
     let response = next.run(req).await;
     let status = response.status().as_u16();
     let duration = start.elapsed().as_secs_f64();
-    state.metrics.record_http_request(&method, &path, status, duration);
+    state
+        .metrics
+        .record_http_request(&method, &path, status, duration);
     response
 }

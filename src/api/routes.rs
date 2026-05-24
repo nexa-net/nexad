@@ -86,7 +86,10 @@ pub fn build(state: AppState) -> Router {
             "/api/v1/cluster/config/proxy",
             post(handlers::set_proxy_config),
         )
-        .layer(middleware::from_fn_with_state(state.clone(), handlers::metrics_middleware))
+        .layer(middleware::from_fn_with_state(
+            state.clone(),
+            handlers::metrics_middleware,
+        ))
         .layer(TraceLayer::new_for_http())
         .with_state(state)
 }

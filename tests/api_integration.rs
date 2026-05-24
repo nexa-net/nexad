@@ -685,7 +685,11 @@ async fn metrics_endpoint_returns_prometheus_format() {
 
     let _ = c.get(server.url("/health")).send().await;
 
-    let resp = c.get(server.url("/metrics")).send().await.expect("request failed");
+    let resp = c
+        .get(server.url("/metrics"))
+        .send()
+        .await
+        .expect("request failed");
     assert_eq!(resp.status(), 200);
 
     let content_type = resp
