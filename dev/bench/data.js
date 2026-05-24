@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1779658071454,
+  "lastUpdate": 1779664792721,
   "repoUrl": "https://github.com/nexa-net/nexad",
   "entries": {
     "Benchmark": [
@@ -287,6 +287,102 @@ window.BENCHMARK_DATA = {
             "name": "list_pods/1000",
             "value": 4628435,
             "range": "± 529733",
+            "unit": "ns/iter"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "nassime.abdiou@icloud.com",
+            "name": "Nassime Abdiou",
+            "username": "na2sime"
+          },
+          "committer": {
+            "email": "nassime.abdiou@icloud.com",
+            "name": "Nassime Abdiou",
+            "username": "na2sime"
+          },
+          "distinct": true,
+          "id": "21f49aa07d36870c407a76023abab0c92f6c7c5b",
+          "message": "ci: add Cross.toml to install protoc for aarch64-linux cross builds",
+          "timestamp": "2026-05-25T01:15:42+02:00",
+          "tree_id": "0f7279589f0da267fd01b2d186d8d77267996ac8",
+          "url": "https://github.com/nexa-net/nexad/commit/21f49aa07d36870c407a76023abab0c92f6c7c5b"
+        },
+        "date": 1779664792413,
+        "tool": "cargo",
+        "benches": [
+          {
+            "name": "encrypt/64B",
+            "value": 6558,
+            "range": "± 145",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "encrypt/1KB",
+            "value": 8096,
+            "range": "± 606",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "encrypt/64KB",
+            "value": 113725,
+            "range": "± 11053",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "decrypt/64B",
+            "value": 3165,
+            "range": "± 18",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "decrypt/1KB",
+            "value": 4198,
+            "range": "± 11",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "dns_lookup/records/10",
+            "value": 214,
+            "range": "± 5",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "dns_lookup/records/100",
+            "value": 216,
+            "range": "± 1",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "dns_lookup/records/1000",
+            "value": 228,
+            "range": "± 5",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "dns_register_deregister",
+            "value": 242,
+            "range": "± 6",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "insert_pod",
+            "value": 392177,
+            "range": "± 98209",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "list_pods/100",
+            "value": 507893,
+            "range": "± 55724",
+            "unit": "ns/iter"
+          },
+          {
+            "name": "list_pods/1000",
+            "value": 4499114,
+            "range": "± 537420",
             "unit": "ns/iter"
           }
         ]
