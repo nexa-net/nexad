@@ -198,6 +198,7 @@ fn init_proxy(
 }
 
 /// Spawn the orchestrator together with its health checker and event watcher.
+#[allow(clippy::too_many_arguments)]
 fn spawn_orchestrator(
     runtime: &Arc<dyn ContainerRuntime>,
     store: &Arc<dyn StateStore>,

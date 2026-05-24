@@ -20,6 +20,12 @@ pub struct PrometheusMetrics {
     proxy_errors_total: IntCounterVec,
 }
 
+impl Default for PrometheusMetrics {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PrometheusMetrics {
     pub fn new() -> Self {
         let registry = Registry::new();
