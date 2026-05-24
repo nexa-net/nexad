@@ -131,7 +131,7 @@ impl TestServer {
             Arc::new(InMemoryRouteStore::new());
 
         let metrics: Arc<dyn nexa_core::ports::metrics::MetricsPort> =
-            Arc::new(nexa_core::ports::metrics::NoOpMetrics);
+            Arc::new(nexad::adapters::metrics::PrometheusMetrics::new());
 
         // Orchestrator
         let handle = Orchestrator::spawn(
@@ -675,5 +675,36 @@ async fn deploy_invalid_spec_returns_400() {
         400,
         "expected 400 for invalid spec, got {}",
         resp.status()
+    );
+}
+
+#[tokio::test]
+async fn metrics_endpoint_returns_prometheus_format() {
+    let server = TestServer::new().await;
+    let c = client();
+
+    let _ = c.get(server.url("/health")).send().await;
+
+    let resp = c.get(server.url("/metrics")).send().await.expect("request failed");
+    assert_eq!(resp.status(), 200);
+
+    let content_type = resp
+        .headers()
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
+    assert!(
+        content_type.contains("text/plain"),
+        "expected text/plain content-type, got: {content_type}"
+    );
+
+    let body = resp.text().await.unwrap();
+    assert!(
+        body.contains("nexa_http_requests_total"),
+        "expected nexa_http_requests_total in metrics output"
+    );
+    assert!(
+        body.contains("nexa_http_request_duration_seconds"),
+        "expected duration histogram in metrics output"
     );
 }
