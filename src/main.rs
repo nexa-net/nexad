@@ -206,6 +206,7 @@ fn spawn_orchestrator(
     master_ip: Option<String>,
     proxy: Option<Arc<dyn nexa_core::ports::proxy::ProxyBackend>>,
     route_store: Option<Arc<dyn nexa_core::ports::route_store::RouteStore>>,
+    metrics: Option<Arc<dyn MetricsPort>>,
 ) -> nexa_core::domain::orchestrator::OrchestratorHandle {
     let transport: Arc<dyn ClusterTransport> = Arc::new(
         nexad::adapters::transport::LocalTransport::new(Arc::clone(runtime)),
@@ -219,7 +220,7 @@ fn spawn_orchestrator(
         master_ip,
         proxy,
         route_store,
-        None,
+        metrics.clone(),
     );
 
     // Spawn health checker background task
@@ -231,7 +232,7 @@ fn spawn_orchestrator(
     nexad::adapters::event_watcher::spawn_event_watcher(
         Arc::clone(runtime),
         handle.command_sender(),
-        None,
+        metrics,
     );
     info!("container event watcher started");
 
@@ -278,6 +279,8 @@ async fn start_single_node(cli: &Cli) -> anyhow::Result<()> {
     let secret_store = init_secrets(cli, &data_dir)?;
     let (dns, master_ip) = init_dns(cli).await?;
     let (proxy, route_store) = init_proxy(cli)?;
+    let metrics: Arc<dyn MetricsPort> =
+        Arc::new(nexad::adapters::metrics::PrometheusMetrics::new());
     let handle = spawn_orchestrator(
         &runtime,
         &store,
@@ -286,6 +289,7 @@ async fn start_single_node(cli: &Cli) -> anyhow::Result<()> {
         master_ip,
         Some(Arc::clone(&proxy)),
         Some(Arc::clone(&route_store)),
+        Some(metrics.clone()),
     );
 
     if let Some(ref email) = cli.acme_email {
@@ -304,8 +308,7 @@ async fn start_single_node(cli: &Cli) -> anyhow::Result<()> {
     }
 
     let addr = format!("{}:{}", cli.host, cli.port);
-    let noop_metrics: Arc<dyn MetricsPort> = Arc::new(nexa_core::ports::metrics::NoOpMetrics);
-    nexad::api::serve(handle, Arc::clone(&store), noop_metrics, &addr).await
+    nexad::api::serve(handle, Arc::clone(&store), metrics, &addr).await
 }
 
 // ────────────────────── master mode ──────────────────────
@@ -320,6 +323,8 @@ async fn start_master(cli: &Cli) -> anyhow::Result<()> {
     let secret_store = init_secrets(cli, &data_dir)?;
     let (dns, master_ip) = init_dns(cli).await?;
     let (proxy, route_store) = init_proxy(cli)?;
+    let metrics: Arc<dyn MetricsPort> =
+        Arc::new(nexad::adapters::metrics::PrometheusMetrics::new());
     let handle = spawn_orchestrator(
         &runtime,
         &store,
@@ -328,6 +333,7 @@ async fn start_master(cli: &Cli) -> anyhow::Result<()> {
         master_ip,
         Some(Arc::clone(&proxy)),
         Some(Arc::clone(&route_store)),
+        Some(metrics.clone()),
     );
 
     if let Some(ref email) = cli.acme_email {
@@ -413,8 +419,7 @@ async fn start_master(cli: &Cli) -> anyhow::Result<()> {
 
     // Start the HTTP API (blocks).
     let addr = format!("{}:{}", cli.host, cli.port);
-    let noop_metrics: Arc<dyn MetricsPort> = Arc::new(nexa_core::ports::metrics::NoOpMetrics);
-    nexad::api::serve(handle, Arc::clone(&store), noop_metrics, &addr).await
+    nexad::api::serve(handle, Arc::clone(&store), metrics, &addr).await
 }
 
 // ────────────────────── worker mode ──────────────────────
