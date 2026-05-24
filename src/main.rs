@@ -9,6 +9,7 @@ use nexa_core::domain::models::*;
 use nexa_core::domain::orchestrator::Orchestrator;
 use nexa_core::ports::cluster::ClusterTransport;
 use nexa_core::ports::dns::DnsProvider;
+use nexa_core::ports::metrics::MetricsPort;
 use nexa_core::ports::runtime::ContainerRuntime;
 use nexa_core::ports::secrets::SecretStore;
 use nexa_core::ports::state::StateStore;
@@ -218,6 +219,7 @@ fn spawn_orchestrator(
         master_ip,
         proxy,
         route_store,
+        None,
     );
 
     // Spawn health checker background task
@@ -301,7 +303,8 @@ async fn start_single_node(cli: &Cli) -> anyhow::Result<()> {
     }
 
     let addr = format!("{}:{}", cli.host, cli.port);
-    nexad::api::serve(handle, Arc::clone(&store), &addr).await
+    let noop_metrics: Arc<dyn MetricsPort> = Arc::new(nexa_core::ports::metrics::NoOpMetrics);
+    nexad::api::serve(handle, Arc::clone(&store), noop_metrics, &addr).await
 }
 
 // ────────────────────── master mode ──────────────────────
@@ -409,7 +412,8 @@ async fn start_master(cli: &Cli) -> anyhow::Result<()> {
 
     // Start the HTTP API (blocks).
     let addr = format!("{}:{}", cli.host, cli.port);
-    nexad::api::serve(handle, Arc::clone(&store), &addr).await
+    let noop_metrics: Arc<dyn MetricsPort> = Arc::new(nexa_core::ports::metrics::NoOpMetrics);
+    nexad::api::serve(handle, Arc::clone(&store), noop_metrics, &addr).await
 }
 
 // ────────────────────── worker mode ──────────────────────

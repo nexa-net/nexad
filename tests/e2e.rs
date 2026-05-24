@@ -52,6 +52,9 @@ impl E2eServer {
         let route_store: Arc<dyn nexa_core::ports::route_store::RouteStore> =
             Arc::new(InMemoryRouteStore::new());
 
+        let metrics: Arc<dyn nexa_core::ports::metrics::MetricsPort> =
+            Arc::new(nexa_core::ports::metrics::NoOpMetrics);
+
         // Orchestrator
         let handle = Orchestrator::spawn(
             runtime,
@@ -62,12 +65,14 @@ impl E2eServer {
             None,
             None,
             Some(route_store),
+            None,
         );
 
         // Build axum app
         let state = AppState {
             handle,
             store: store.clone(),
+            metrics,
         };
         let app = routes::build(state);
 

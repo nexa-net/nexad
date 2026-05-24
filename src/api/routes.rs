@@ -1,4 +1,5 @@
 use axum::Router;
+use axum::middleware;
 use axum::routing::{delete, get, post};
 use tower_http::trace::TraceLayer;
 
@@ -8,6 +9,7 @@ use super::handlers;
 pub fn build(state: AppState) -> Router {
     Router::new()
         .route("/health", get(handlers::health))
+        .route("/metrics", get(handlers::metrics_endpoint))
         .route("/api/v1/projects", get(handlers::list_projects))
         .route("/api/v1/projects", post(handlers::create_project))
         .route(
@@ -84,6 +86,7 @@ pub fn build(state: AppState) -> Router {
             "/api/v1/cluster/config/proxy",
             post(handlers::set_proxy_config),
         )
+        .layer(middleware::from_fn_with_state(state.clone(), handlers::metrics_middleware))
         .layer(TraceLayer::new_for_http())
         .with_state(state)
 }

@@ -1,10 +1,13 @@
 use axum::Json;
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
+use axum::middleware::Next;
+use axum::http::Request as AxumRequest;
 use axum::response::IntoResponse;
 use axum::response::sse::{Event, Sse};
 use futures::StreamExt;
 use serde::Deserialize;
+use std::time::Instant;
 
 use nexa_core::config::parse_deployment;
 use nexa_core::domain::scheduler::SchedulerConfig;
@@ -585,4 +588,33 @@ pub async fn set_proxy_config(
         "acme_email": req.acme_email,
         "status": "updated"
     }))
+}
+
+pub async fn metrics_endpoint(State(state): AppStateExtractor) -> impl IntoResponse {
+    use crate::adapters::metrics::PrometheusMetrics;
+    let prom = state.metrics.as_any().downcast_ref::<PrometheusMetrics>();
+    match prom {
+        Some(p) => (
+            StatusCode::OK,
+            [("content-type", "text/plain; version=0.0.4")],
+            p.encode(),
+        )
+            .into_response(),
+        None => (StatusCode::OK, "# no prometheus metrics available\n").into_response(),
+    }
+}
+
+pub async fn metrics_middleware(
+    State(state): AppStateExtractor,
+    req: AxumRequest<axum::body::Body>,
+    next: Next,
+) -> impl IntoResponse {
+    let method = req.method().to_string();
+    let path = req.uri().path().to_string();
+    let start = Instant::now();
+    let response = next.run(req).await;
+    let status = response.status().as_u16();
+    let duration = start.elapsed().as_secs_f64();
+    state.metrics.record_http_request(&method, &path, status, duration);
+    response
 }
