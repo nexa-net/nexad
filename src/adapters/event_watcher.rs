@@ -6,15 +6,20 @@ use tracing::{error, info, warn};
 use uuid::Uuid;
 
 use nexa_core::domain::orchestrator::Command;
+use nexa_core::ports::metrics::MetricsPort;
 use nexa_core::ports::runtime::{ContainerRuntime, RuntimeEvent};
 
-pub fn spawn_event_watcher(runtime: Arc<dyn ContainerRuntime>, tx: mpsc::Sender<Command>) {
+pub fn spawn_event_watcher(
+    runtime: Arc<dyn ContainerRuntime>,
+    tx: mpsc::Sender<Command>,
+    metrics: Option<Arc<dyn MetricsPort>>,
+) {
     tokio::spawn(async move {
         info!("container event watcher starting");
         loop {
             match runtime.events().await {
                 Ok(stream) => {
-                    handle_event_stream(stream, &tx).await;
+                    handle_event_stream(stream, &tx, metrics.as_deref()).await;
                     warn!("event stream ended, reconnecting in 5s");
                     tokio::time::sleep(std::time::Duration::from_secs(5)).await;
                 }
@@ -30,6 +35,7 @@ pub fn spawn_event_watcher(runtime: Arc<dyn ContainerRuntime>, tx: mpsc::Sender<
 async fn handle_event_stream(
     mut stream: nexa_core::ports::runtime::EventStream,
     tx: &mpsc::Sender<Command>,
+    metrics: Option<&dyn MetricsPort>,
 ) {
     while let Some(event) = stream.next().await {
         match event {
@@ -38,6 +44,9 @@ async fn handle_event_stream(
                 exit_code,
             } => {
                 info!(container_id, exit_code, "container died event");
+                if let Some(m) = metrics {
+                    m.record_container_event("died");
+                }
                 if let Some(pod_id) = extract_pod_id(&container_id) {
                     let cmd = Command::ContainerExited { pod_id, exit_code };
                     if tx.send(cmd).await.is_err() {
@@ -48,6 +57,9 @@ async fn handle_event_stream(
             }
             RuntimeEvent::ContainerOom { container_id } => {
                 warn!(container_id, "container OOM event");
+                if let Some(m) = metrics {
+                    m.record_container_event("oom");
+                }
                 if let Some(pod_id) = extract_pod_id(&container_id) {
                     let cmd = Command::ContainerExited {
                         pod_id,
@@ -60,7 +72,10 @@ async fn handle_event_stream(
                 }
             }
             RuntimeEvent::ContainerStarted { container_id } => {
-                info!(container_id, "container started event (ignored)");
+                info!(container_id, "container started event");
+                if let Some(m) = metrics {
+                    m.record_container_event("started");
+                }
             }
         }
     }
@@ -95,7 +110,7 @@ mod tests {
         let (tx, mut rx) = mpsc::channel(16);
         let stream: nexa_core::ports::runtime::EventStream =
             Box::pin(futures::stream::iter(events));
-        handle_event_stream(stream, &tx).await;
+        handle_event_stream(stream, &tx, None).await;
         let cmd = rx.try_recv().expect("should have received a command");
         match cmd {
             Command::ContainerExited {
@@ -118,7 +133,7 @@ mod tests {
         let (tx, mut rx) = mpsc::channel(16);
         let stream: nexa_core::ports::runtime::EventStream =
             Box::pin(futures::stream::iter(events));
-        handle_event_stream(stream, &tx).await;
+        handle_event_stream(stream, &tx, None).await;
         let cmd = rx.try_recv().expect("should have received a command");
         match cmd {
             Command::ContainerExited {
@@ -140,7 +155,23 @@ mod tests {
         let (tx, mut rx) = mpsc::channel(16);
         let stream: nexa_core::ports::runtime::EventStream =
             Box::pin(futures::stream::iter(events));
-        handle_event_stream(stream, &tx).await;
+        handle_event_stream(stream, &tx, None).await;
         assert!(rx.try_recv().is_err(), "should not forward started events");
+    }
+
+    #[tokio::test]
+    async fn event_watcher_records_metrics_on_die() {
+        use nexa_core::ports::metrics::NoOpMetrics;
+
+        let pod_id = Uuid::new_v4();
+        let events = vec![RuntimeEvent::ContainerDied {
+            container_id: pod_id.to_string(),
+            exit_code: 1,
+        }];
+        let (tx, _rx) = mpsc::channel(16);
+        let stream: nexa_core::ports::runtime::EventStream =
+            Box::pin(futures::stream::iter(events));
+        let metrics = NoOpMetrics;
+        handle_event_stream(stream, &tx, Some(&metrics)).await;
     }
 }

@@ -231,6 +231,7 @@ fn spawn_orchestrator(
     nexad::adapters::event_watcher::spawn_event_watcher(
         Arc::clone(runtime),
         handle.command_sender(),
+        None,
     );
     info!("container event watcher started");
 
