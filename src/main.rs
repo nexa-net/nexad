@@ -298,8 +298,7 @@ async fn start_single_node(cli: &Cli) -> anyhow::Result<()> {
     let (proxy, route_store) = init_proxy(cli)?;
     let metrics: Arc<dyn MetricsPort> =
         Arc::new(nexad::adapters::metrics::PrometheusMetrics::new());
-    let (event_tx, _) =
-        tokio::sync::broadcast::channel::<nexad::api::ClusterEvent>(256);
+    let (event_tx, _) = tokio::sync::broadcast::channel::<nexad::api::ClusterEvent>(256);
     let handle = spawn_orchestrator(
         &runtime,
         &store,
@@ -345,8 +344,7 @@ async fn start_master(cli: &Cli) -> anyhow::Result<()> {
     let (proxy, route_store) = init_proxy(cli)?;
     let metrics: Arc<dyn MetricsPort> =
         Arc::new(nexad::adapters::metrics::PrometheusMetrics::new());
-    let (event_tx, _) =
-        tokio::sync::broadcast::channel::<nexad::api::ClusterEvent>(256);
+    let (event_tx, _) = tokio::sync::broadcast::channel::<nexad::api::ClusterEvent>(256);
     let handle = spawn_orchestrator(
         &runtime,
         &store,

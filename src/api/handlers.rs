@@ -629,9 +629,7 @@ pub async fn node_stats(State(state): AppStateExtractor) -> impl IntoResponse {
     let pod_count = match state.store.list_pods(None).await {
         Ok(pods) => pods
             .iter()
-            .filter(|p| {
-                p.status == nexa_core::domain::models::PodStatus::Running
-            })
+            .filter(|p| p.status == nexa_core::domain::models::PodStatus::Running)
             .count() as u32,
         Err(_) => 0,
     };
@@ -687,9 +685,7 @@ pub async fn node_stats(State(state): AppStateExtractor) -> impl IntoResponse {
     }
 }
 
-pub async fn events_stream(
-    State(state): AppStateExtractor,
-) -> impl IntoResponse {
+pub async fn events_stream(State(state): AppStateExtractor) -> impl IntoResponse {
     let mut rx = state.event_tx.subscribe();
     let stream = async_stream::stream! {
         loop {
