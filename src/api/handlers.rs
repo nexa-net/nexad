@@ -604,6 +604,87 @@ pub async fn metrics_endpoint(State(state): AppStateExtractor) -> impl IntoRespo
     }
 }
 
+pub async fn node_stats(State(state): AppStateExtractor) -> impl IntoResponse {
+    use sysinfo::System;
+
+    let mut sys = System::new();
+    sys.refresh_cpu_all();
+    // Small delay to get meaningful CPU readings
+    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+    sys.refresh_cpu_all();
+    sys.refresh_memory();
+
+    let cpu_count = sys.cpus().len() as f64;
+    let cpu_usage: f64 = sys.cpus().iter().map(|c| c.cpu_usage() as f64).sum::<f64>() / cpu_count;
+    let mem_total = sys.total_memory();
+    let mem_used = sys.used_memory();
+
+    let hostname = hostname::get()
+        .map(|h| h.to_string_lossy().to_string())
+        .unwrap_or_else(|_| "unknown".into());
+
+    // Get pod count from store
+    let pod_count = match state.store.list_pods(None).await {
+        Ok(pods) => pods
+            .iter()
+            .filter(|p| {
+                p.status == nexa_core::domain::models::PodStatus::Running
+            })
+            .count() as u32,
+        Err(_) => 0,
+    };
+
+    // Check for registered nodes
+    let nodes = state.store.list_nodes().await.unwrap_or_default();
+
+    if nodes.is_empty() {
+        // Single-node mode: return local stats
+        Json(serde_json::json!([{
+            "name": hostname,
+            "role": "master",
+            "status": "ready",
+            "cpu_cores": cpu_count,
+            "cpu_usage_percent": (cpu_usage * 10.0).round() / 10.0,
+            "memory_total_bytes": mem_total,
+            "memory_used_bytes": mem_used,
+            "pod_count": pod_count,
+        }]))
+        .into_response()
+    } else {
+        // Multi-node: return stored nodes with local stats for this node
+        let mut result: Vec<serde_json::Value> = Vec::new();
+        for node in &nodes {
+            let is_local = node.name == hostname || node.address.starts_with("127.");
+            if is_local {
+                result.push(serde_json::json!({
+                    "name": node.name,
+                    "role": node.role.to_string().to_lowercase(),
+                    "status": node.status.to_string().to_lowercase(),
+                    "cpu_cores": cpu_count,
+                    "cpu_usage_percent": (cpu_usage * 10.0).round() / 10.0,
+                    "memory_total_bytes": mem_total,
+                    "memory_used_bytes": mem_used,
+                    "pod_count": node.resources.running_pods,
+                }));
+            } else {
+                result.push(serde_json::json!({
+                    "name": node.name,
+                    "role": node.role.to_string().to_lowercase(),
+                    "status": node.status.to_string().to_lowercase(),
+                    "cpu_cores": node.resources.cpu_cores,
+                    "cpu_usage_percent": if node.resources.cpu_cores > 0.0 {
+                        ((node.resources.cpu_cores - node.resources.cpu_available) / node.resources.cpu_cores * 100.0 * 10.0).round() / 10.0
+                    } else { 0.0 },
+                    "memory_total_bytes": node.resources.memory_bytes,
+                    "memory_used_bytes": node.resources.memory_bytes - node.resources.memory_available,
+                    "pod_count": node.resources.running_pods,
+                }));
+            }
+        }
+        Json(result).into_response()
+    }
+}
+
 pub async fn metrics_middleware(
     State(state): AppStateExtractor,
     req: AxumRequest<axum::body::Body>,

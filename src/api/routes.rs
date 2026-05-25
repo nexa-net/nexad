@@ -61,6 +61,7 @@ pub fn build(state: AppState) -> Router {
         )
         // Node management routes
         .route("/api/v1/nodes", get(handlers::list_nodes))
+        .route("/api/v1/nodes/stats", get(handlers::node_stats))
         .route("/api/v1/nodes/{name}/drain", post(handlers::drain_node))
         .route("/api/v1/nodes/{name}", delete(handlers::remove_node))
         .route(
