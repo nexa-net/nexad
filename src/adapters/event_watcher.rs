@@ -1,7 +1,8 @@
 use std::sync::Arc;
 
+use chrono::Utc;
 use futures::StreamExt;
-use tokio::sync::mpsc;
+use tokio::sync::{broadcast, mpsc};
 use tracing::{error, info, warn};
 use uuid::Uuid;
 
@@ -9,17 +10,21 @@ use nexa_core::domain::orchestrator::Command;
 use nexa_core::ports::metrics::MetricsPort;
 use nexa_core::ports::runtime::{ContainerRuntime, RuntimeEvent};
 
+use crate::api::ClusterEvent;
+
 pub fn spawn_event_watcher(
     runtime: Arc<dyn ContainerRuntime>,
     tx: mpsc::Sender<Command>,
     metrics: Option<Arc<dyn MetricsPort>>,
+    event_broadcast: Option<broadcast::Sender<ClusterEvent>>,
 ) {
     tokio::spawn(async move {
         info!("container event watcher starting");
         loop {
             match runtime.events().await {
                 Ok(stream) => {
-                    handle_event_stream(stream, &tx, metrics.as_deref()).await;
+                    handle_event_stream(stream, &tx, metrics.as_deref(), event_broadcast.as_ref())
+                        .await;
                     warn!("event stream ended, reconnecting in 5s");
                     tokio::time::sleep(std::time::Duration::from_secs(5)).await;
                 }
@@ -36,6 +41,7 @@ async fn handle_event_stream(
     mut stream: nexa_core::ports::runtime::EventStream,
     tx: &mpsc::Sender<Command>,
     metrics: Option<&dyn MetricsPort>,
+    event_broadcast: Option<&broadcast::Sender<ClusterEvent>>,
 ) {
     while let Some(event) = stream.next().await {
         match event {
@@ -46,6 +52,19 @@ async fn handle_event_stream(
                 info!(container_id, exit_code, "container died event");
                 if let Some(m) = metrics {
                     m.record_container_event("died");
+                }
+                if let Some(bc) = event_broadcast {
+                    let _ = bc.send(ClusterEvent {
+                        timestamp: Utc::now(),
+                        kind: "pod".into(),
+                        name: container_id.clone(),
+                        action: if exit_code == 137 {
+                            "OOMKilled".into()
+                        } else {
+                            "died".into()
+                        },
+                        message: format!("Container exited with code {exit_code}"),
+                    });
                 }
                 if let Some(pod_id) = extract_pod_id(&container_id) {
                     let cmd = Command::ContainerExited { pod_id, exit_code };
@@ -59,6 +78,15 @@ async fn handle_event_stream(
                 warn!(container_id, "container OOM event");
                 if let Some(m) = metrics {
                     m.record_container_event("oom");
+                }
+                if let Some(bc) = event_broadcast {
+                    let _ = bc.send(ClusterEvent {
+                        timestamp: Utc::now(),
+                        kind: "pod".into(),
+                        name: container_id.clone(),
+                        action: "OOMKilled".into(),
+                        message: "Container killed by OOM".into(),
+                    });
                 }
                 if let Some(pod_id) = extract_pod_id(&container_id) {
                     let cmd = Command::ContainerExited {
@@ -75,6 +103,15 @@ async fn handle_event_stream(
                 info!(container_id, "container started event");
                 if let Some(m) = metrics {
                     m.record_container_event("started");
+                }
+                if let Some(bc) = event_broadcast {
+                    let _ = bc.send(ClusterEvent {
+                        timestamp: Utc::now(),
+                        kind: "pod".into(),
+                        name: container_id.clone(),
+                        action: "started".into(),
+                        message: "Container started".into(),
+                    });
                 }
             }
         }
@@ -110,7 +147,7 @@ mod tests {
         let (tx, mut rx) = mpsc::channel(16);
         let stream: nexa_core::ports::runtime::EventStream =
             Box::pin(futures::stream::iter(events));
-        handle_event_stream(stream, &tx, None).await;
+        handle_event_stream(stream, &tx, None, None).await;
         let cmd = rx.try_recv().expect("should have received a command");
         match cmd {
             Command::ContainerExited {
@@ -133,7 +170,7 @@ mod tests {
         let (tx, mut rx) = mpsc::channel(16);
         let stream: nexa_core::ports::runtime::EventStream =
             Box::pin(futures::stream::iter(events));
-        handle_event_stream(stream, &tx, None).await;
+        handle_event_stream(stream, &tx, None, None).await;
         let cmd = rx.try_recv().expect("should have received a command");
         match cmd {
             Command::ContainerExited {
@@ -155,8 +192,24 @@ mod tests {
         let (tx, mut rx) = mpsc::channel(16);
         let stream: nexa_core::ports::runtime::EventStream =
             Box::pin(futures::stream::iter(events));
-        handle_event_stream(stream, &tx, None).await;
+        handle_event_stream(stream, &tx, None, None).await;
         assert!(rx.try_recv().is_err(), "should not forward started events");
+    }
+
+    #[tokio::test]
+    async fn event_watcher_broadcasts_events() {
+        let pod_id = Uuid::new_v4();
+        let events = vec![RuntimeEvent::ContainerStarted {
+            container_id: pod_id.to_string(),
+        }];
+        let (tx, _rx) = mpsc::channel(16);
+        let (bc_tx, mut bc_rx) = broadcast::channel(16);
+        let stream: nexa_core::ports::runtime::EventStream =
+            Box::pin(futures::stream::iter(events));
+        handle_event_stream(stream, &tx, None, Some(&bc_tx)).await;
+        let event = bc_rx.try_recv().expect("should have broadcast event");
+        assert_eq!(event.action, "started");
+        assert_eq!(event.kind, "pod");
     }
 
     #[tokio::test]
@@ -172,6 +225,6 @@ mod tests {
         let stream: nexa_core::ports::runtime::EventStream =
             Box::pin(futures::stream::iter(events));
         let metrics = NoOpMetrics;
-        handle_event_stream(stream, &tx, Some(&metrics)).await;
+        handle_event_stream(stream, &tx, Some(&metrics), None).await;
     }
 }

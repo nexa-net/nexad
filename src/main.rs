@@ -222,6 +222,7 @@ fn spawn_orchestrator(
     proxy: Option<Arc<dyn nexa_core::ports::proxy::ProxyBackend>>,
     route_store: Option<Arc<dyn nexa_core::ports::route_store::RouteStore>>,
     metrics: Option<Arc<dyn MetricsPort>>,
+    event_tx: tokio::sync::broadcast::Sender<nexad::api::ClusterEvent>,
 ) -> nexa_core::domain::orchestrator::OrchestratorHandle {
     let transport: Arc<dyn ClusterTransport> = Arc::new(
         nexad::adapters::transport::LocalTransport::new(Arc::clone(runtime)),
@@ -248,6 +249,7 @@ fn spawn_orchestrator(
         Arc::clone(runtime),
         handle.command_sender(),
         metrics,
+        Some(event_tx),
     );
     info!("container event watcher started");
 
@@ -296,6 +298,8 @@ async fn start_single_node(cli: &Cli) -> anyhow::Result<()> {
     let (proxy, route_store) = init_proxy(cli)?;
     let metrics: Arc<dyn MetricsPort> =
         Arc::new(nexad::adapters::metrics::PrometheusMetrics::new());
+    let (event_tx, _) =
+        tokio::sync::broadcast::channel::<nexad::api::ClusterEvent>(256);
     let handle = spawn_orchestrator(
         &runtime,
         &store,
@@ -305,6 +309,7 @@ async fn start_single_node(cli: &Cli) -> anyhow::Result<()> {
         Some(Arc::clone(&proxy)),
         Some(Arc::clone(&route_store)),
         Some(metrics.clone()),
+        event_tx.clone(),
     );
 
     if let Some(ref email) = cli.acme_email {
@@ -323,7 +328,7 @@ async fn start_single_node(cli: &Cli) -> anyhow::Result<()> {
     }
 
     let addr = format!("{}:{}", cli.host, cli.port);
-    nexad::api::serve(handle, Arc::clone(&store), metrics, &addr).await
+    nexad::api::serve(handle, Arc::clone(&store), metrics, event_tx.clone(), &addr).await
 }
 
 // ────────────────────── master mode ──────────────────────
@@ -340,6 +345,8 @@ async fn start_master(cli: &Cli) -> anyhow::Result<()> {
     let (proxy, route_store) = init_proxy(cli)?;
     let metrics: Arc<dyn MetricsPort> =
         Arc::new(nexad::adapters::metrics::PrometheusMetrics::new());
+    let (event_tx, _) =
+        tokio::sync::broadcast::channel::<nexad::api::ClusterEvent>(256);
     let handle = spawn_orchestrator(
         &runtime,
         &store,
@@ -349,6 +356,7 @@ async fn start_master(cli: &Cli) -> anyhow::Result<()> {
         Some(Arc::clone(&proxy)),
         Some(Arc::clone(&route_store)),
         Some(metrics.clone()),
+        event_tx.clone(),
     );
 
     if let Some(ref email) = cli.acme_email {
@@ -434,7 +442,7 @@ async fn start_master(cli: &Cli) -> anyhow::Result<()> {
 
     // Start the HTTP API (blocks).
     let addr = format!("{}:{}", cli.host, cli.port);
-    nexad::api::serve(handle, Arc::clone(&store), metrics, &addr).await
+    nexad::api::serve(handle, Arc::clone(&store), metrics, event_tx.clone(), &addr).await
 }
 
 // ────────────────────── worker mode ──────────────────────

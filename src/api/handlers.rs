@@ -13,6 +13,8 @@ use nexa_core::config::parse_deployment;
 use nexa_core::domain::scheduler::SchedulerConfig;
 use nexa_core::error::NexaError;
 
+use tokio::sync::broadcast;
+
 use super::AppState as SharedState;
 
 type AppStateExtractor = State<SharedState>;
@@ -683,6 +685,28 @@ pub async fn node_stats(State(state): AppStateExtractor) -> impl IntoResponse {
         }
         Json(result).into_response()
     }
+}
+
+pub async fn events_stream(
+    State(state): AppStateExtractor,
+) -> impl IntoResponse {
+    let mut rx = state.event_tx.subscribe();
+    let stream = async_stream::stream! {
+        loop {
+            match rx.recv().await {
+                Ok(event) => {
+                    let json = serde_json::to_string(&event).unwrap_or_default();
+                    yield Ok::<_, std::convert::Infallible>(Event::default().data(json));
+                }
+                Err(broadcast::error::RecvError::Lagged(n)) => {
+                    let msg = format!("{{\"warning\":\"missed {n} events\"}}");
+                    yield Ok(Event::default().data(msg));
+                }
+                Err(broadcast::error::RecvError::Closed) => break,
+            }
+        }
+    };
+    Sse::new(stream).into_response()
 }
 
 pub async fn metrics_middleware(

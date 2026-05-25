@@ -69,10 +69,12 @@ impl E2eServer {
         );
 
         // Build axum app
+        let (event_tx, _) = tokio::sync::broadcast::channel(256);
         let state = AppState {
             handle,
             store: store.clone(),
             metrics,
+            event_tx,
         };
         let app = routes::build(state);
 
