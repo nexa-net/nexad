@@ -14,6 +14,20 @@ use nexa_core::ports::runtime::ContainerRuntime;
 use nexa_core::ports::secrets::SecretStore;
 use nexa_core::ports::state::StateStore;
 
+fn default_data_dir() -> String {
+    dirs::home_dir()
+        .map(|h| h.join(".nexa").join("data"))
+        .unwrap_or_else(|| PathBuf::from("/var/lib/nexa"))
+        .to_string_lossy()
+        .into_owned()
+}
+
+fn default_proxy_config_dir() -> String {
+    let mut p = PathBuf::from(default_data_dir());
+    p.push("proxy");
+    p.to_string_lossy().into_owned()
+}
+
 #[derive(Parser)]
 #[command(name = "nexad", about = "NexaNet daemon", version)]
 struct Cli {
@@ -23,7 +37,7 @@ struct Cli {
     #[arg(long, default_value = "6443")]
     port: u16,
 
-    #[arg(long, default_value = "/var/lib/nexa")]
+    #[arg(long, default_value_t = default_data_dir())]
     data_dir: String,
 
     /// Node mode: single, master, or worker
@@ -63,7 +77,7 @@ struct Cli {
     proxy_backend: String,
 
     /// Proxy config directory
-    #[arg(long, default_value = "/var/lib/nexa/proxy")]
+    #[arg(long, default_value_t = default_proxy_config_dir())]
     proxy_config_dir: String,
 
     /// ACME email for automatic TLS
